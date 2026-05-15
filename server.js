@@ -12,6 +12,7 @@ fastify.register(require('./src/plugins/auth'));
 fastify.register(require('./src/routes/auth'));
 fastify.register(require('./src/routes/hero'));
 fastify.register(require('./src/routes/camps'));
+fastify.register(require('./src/routes/fight'));
 fastify.register(require('./src/routes/pvp'));
 fastify.register(require('./src/routes/world'));
 

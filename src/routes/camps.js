@@ -224,7 +224,8 @@ async function campRoutes(fastify) {
     await pool.query(`UPDATE camps SET status = 'done' WHERE user_id = $1`, [id]);
     await pool.query(`
       UPDATE pvp_challenges SET status = 'prep', prep_started_at = NOW(),
-        fight_seed = FLOOR(RANDOM() * 4294967296)::BIGINT
+        fight_seed = FLOOR(RANDOM() * 4294967296)::BIGINT,
+        defender_snap = (SELECT combat_snap FROM camps WHERE user_id = pvp_challenges.defender_id LIMIT 1)
       WHERE defender_id = $1 AND status = 'pending'
     `, [id]);
     return { ok: true };
@@ -241,7 +242,8 @@ async function campRoutes(fastify) {
     await pool.query(`
       UPDATE pvp_challenges
       SET status = 'prep', prep_started_at = NOW(),
-          fight_seed = FLOOR(RANDOM() * 4294967296)::BIGINT
+          fight_seed = FLOOR(RANDOM() * 4294967296)::BIGINT,
+          defender_snap = (SELECT combat_snap FROM camps WHERE user_id = pvp_challenges.defender_id LIMIT 1)
       WHERE status = 'pending'
         AND (defender_id = $1 OR challenger_id = $1)
         AND NOT EXISTS (
@@ -262,7 +264,7 @@ async function campRoutes(fastify) {
                COALESCE(chero.save_data->'hero'->>'name', cu.username) AS challenger_name,
                du.username AS defender_username,
                COALESCE(dhero.save_data->'hero'->>'name', du.username) AS defender_name,
-               dc.combat_snap AS defender_snap,
+               COALESCE(ch.defender_snap, dc.combat_snap) AS defender_snap,
                dc.started_at AS adventure_entered_at
         FROM pvp_challenges ch
         JOIN users cu ON cu.id = ch.challenger_id
@@ -356,8 +358,9 @@ async function campRoutes(fastify) {
         );
         // Create A vs C fight in prep state (C challenges A)
         const fightInsert = await pool.query(`
-          INSERT INTO pvp_challenges (challenger_id, defender_id, adventure_id, status, prep_started_at, challenger_snap, fight_seed)
-          VALUES ($1, $2, $3, 'prep', NOW(), $4, FLOOR(RANDOM() * 4294967296)::BIGINT)
+          INSERT INTO pvp_challenges (challenger_id, defender_id, adventure_id, status, prep_started_at, challenger_snap, fight_seed, defender_snap)
+          VALUES ($1, $2, $3, 'prep', NOW(), $4, FLOOR(RANDOM() * 4294967296)::BIGINT,
+                 (SELECT combat_snap FROM camps WHERE user_id = $2 LIMIT 1))
           RETURNING id, prep_started_at, fight_seed
         `, [challengerId, prior.challenger_id, camp.adventure_id, snapJson]);
         return {
@@ -390,8 +393,9 @@ async function campRoutes(fastify) {
       );
       // Create C vs A fight in prep state
       const fightInsert = await pool.query(`
-        INSERT INTO pvp_challenges (challenger_id, defender_id, adventure_id, status, prep_started_at, challenger_snap, fight_seed)
-        VALUES ($1, $2, $3, 'prep', NOW(), $4, FLOOR(RANDOM() * 4294967296)::BIGINT)
+        INSERT INTO pvp_challenges (challenger_id, defender_id, adventure_id, status, prep_started_at, challenger_snap, fight_seed, defender_snap)
+        VALUES ($1, $2, $3, 'prep', NOW(), $4, FLOOR(RANDOM() * 4294967296)::BIGINT,
+               (SELECT combat_snap FROM camps WHERE user_id = $2 LIMIT 1))
         RETURNING id, prep_started_at, fight_seed
       `, [challengerId, defenderUserId, camp.adventure_id, snapJson]);
       return {
@@ -508,7 +512,8 @@ async function campRoutes(fastify) {
 
     // Allow either challenger or defender to record the result
     const chResult = await pool.query(`
-      SELECT ch.*, dc.combat_snap AS defender_snap
+      SELECT ch.*,
+        COALESCE(ch.defender_snap, dc.combat_snap) AS resolved_defender_snap
       FROM pvp_challenges ch
       LEFT JOIN camps dc ON dc.user_id = ch.defender_id
       WHERE ch.id = $1 AND (ch.challenger_id = $2 OR ch.defender_id = $2) AND ch.status = 'prep'
@@ -522,7 +527,7 @@ async function campRoutes(fastify) {
     // Server determines winner via deterministic simulation (fight_seed + stored snaps)
     const { attackerWon } = simulateDuel(
       challenge.challenger_snap,
-      challenge.defender_snap,
+      challenge.resolved_defender_snap,
       challenge.fight_seed,
     );
     const winnerId  = attackerWon ? challengerId : defenderId;
