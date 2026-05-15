@@ -1,19 +1,8 @@
 require('dotenv').config();
 const fastify = require('fastify')({ logger: true });
 
-const allowedOrigins = (process.env.CLIENT_ORIGIN || '')
-  .split(',').map(s => s.trim()).filter(Boolean);
-
 fastify.register(require('@fastify/cors'), {
-  origin: process.env.NODE_ENV === 'production'
-    ? (origin, cb) => {
-        if (!origin || allowedOrigins.some(o => o === origin || (o.startsWith('https://*.') && origin.endsWith(o.slice(8))))) {
-          cb(null, true);
-        } else {
-          cb(new Error('Not allowed by CORS'));
-        }
-      }
-    : true,
+  origin: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
