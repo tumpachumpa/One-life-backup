@@ -43,6 +43,68 @@ function calcCombatStats(saveData) {
   return { maxHp, damage, armor, hitChance, name: hero.name || 'Adventurer' };
 }
 
+function mulberry32(seed) {
+  let s = seed >>> 0;
+  return function() {
+    s += 0x6D2B79F5;
+    let x = s;
+    x = Math.imul(x ^ (x >>> 15), x | 1);
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const DUEL_AUTO_ATTACK_TICKS = 3;
+const DUEL_MAX_TICKS = 600;
+
+function simulateDuel(challengerSnap, defenderSnap, fightSeed) {
+  const seed = (fightSeed != null ? Number(fightSeed) : 0) >>> 0;
+  const atkRng = mulberry32((seed ^ 0x10001) >>> 0);
+  const defRng = mulberry32((seed ^ 0x10002) >>> 0);
+
+  function statsFromSnap(snap) {
+    return {
+      hp:          (snap?.maxHp       || 100),
+      maxHp:       (snap?.maxHp       || 100),
+      damage:      (snap?.damage      || 10),
+      armor:       (snap?.armor       || 0),
+      attackSpeed: (snap?.attackSpeed || 1),
+      critChance:  (snap?.critChance  || 5),
+      critMult:    (snap?.critMult    || 1.5),
+      critResist:  (snap?.critResist  || 0),
+      progress:    0,
+    };
+  }
+
+  const atk = statsFromSnap(challengerSnap);
+  const def = statsFromSnap(defenderSnap);
+
+  for (let tick = 1; tick <= DUEL_MAX_TICKS; tick++) {
+    atk.progress += atk.attackSpeed;
+    def.progress += def.attackSpeed;
+
+    while (atk.progress >= DUEL_AUTO_ATTACK_TICKS) {
+      atk.progress -= DUEL_AUTO_ATTACK_TICKS;
+      const effectiveCrit = Math.max(0, atk.critChance - def.critResist);
+      const isCrit = atkRng() * 100 < effectiveCrit;
+      const rawDmg = atk.damage * (isCrit ? atk.critMult : 1);
+      def.hp -= Math.max(1, Math.floor(rawDmg * (100 / (100 + def.armor))));
+    }
+    if (def.hp <= 0) return { attackerWon: true };
+
+    while (def.progress >= DUEL_AUTO_ATTACK_TICKS) {
+      def.progress -= DUEL_AUTO_ATTACK_TICKS;
+      const effectiveCrit = Math.max(0, def.critChance - atk.critResist);
+      const isCrit = defRng() * 100 < effectiveCrit;
+      const rawDmg = def.damage * (isCrit ? def.critMult : 1);
+      atk.hp -= Math.max(1, Math.floor(rawDmg * (100 / (100 + atk.armor))));
+    }
+    if (atk.hp <= 0) return { attackerWon: false };
+  }
+
+  return { attackerWon: (atk.hp / atk.maxHp) >= (def.hp / def.maxHp) };
+}
+
 function simulateCombat(atkSave, defSave) {
   const atk = calcCombatStats(atkSave);
   const def = calcCombatStats(defSave);
@@ -419,11 +481,11 @@ async function campRoutes(fastify) {
 
   // ── POST /camps/fight ─────────────────────────────────────────────────────
   // Called by either party after the DuelArena combat ends.
-  // attackerWon: boolean from the client (deterministic, both clients agree).
-  // If attackerWon is null the fight is already done — returns existing record.
+  // Server runs its own deterministic simulation using fight_seed + stored snaps.
+  // Client does not report attackerWon — server is authoritative.
   fastify.post('/camps/fight', { preHandler: fastify.authenticate }, async (request, reply) => {
     const { id: userId }  = request.user;
-    const { challengeId, attackerWon } = request.body;
+    const { challengeId } = request.body;
     if (!challengeId) return reply.status(400).send({ error: 'Missing challengeId' });
 
     // If already resolved, return the existing record (idempotent)
@@ -436,7 +498,7 @@ async function campRoutes(fastify) {
     if (doneResult.rows[0]) {
       const ch = doneResult.rows[0];
       return {
-        attackerWon: ch.winner_id === ch.challenger_id,
+        attackerWon: String(ch.winner_id) === String(ch.challenger_id),
         winnerId: ch.winner_id,
         recordId: ch.record_id,
         log: [],
@@ -444,13 +506,12 @@ async function campRoutes(fastify) {
       };
     }
 
-    if (attackerWon === null || attackerWon === undefined)
-      return reply.status(400).send({ error: 'Missing attackerWon' });
-
     // Allow either challenger or defender to record the result
     const chResult = await pool.query(`
-      SELECT * FROM pvp_challenges
-      WHERE id = $1 AND (challenger_id = $2 OR defender_id = $2) AND status = 'prep'
+      SELECT ch.*, dc.combat_snap AS defender_snap
+      FROM pvp_challenges ch
+      LEFT JOIN camps dc ON dc.user_id = ch.defender_id
+      WHERE ch.id = $1 AND (ch.challenger_id = $2 OR ch.defender_id = $2) AND ch.status = 'prep'
     `, [challengeId, userId]);
     if (!chResult.rows[0]) return reply.status(404).send({ error: 'Challenge not found or not in prep' });
 
@@ -458,7 +519,12 @@ async function campRoutes(fastify) {
     const challengerId = challenge.challenger_id;
     const defenderId   = challenge.defender_id;
 
-    // Winner and loser determined by the client-reported result
+    // Server determines winner via deterministic simulation (fight_seed + stored snaps)
+    const { attackerWon } = simulateDuel(
+      challenge.challenger_snap,
+      challenge.defender_snap,
+      challenge.fight_seed,
+    );
     const winnerId  = attackerWon ? challengerId : defenderId;
     const loserId   = attackerWon ? defenderId   : challengerId;
 
