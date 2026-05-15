@@ -8,10 +8,10 @@ import {
   getHungerLevel,
   getWeaponAttackType,
   resolveEquipment,
-} from 'onelife-game/logic/hero.js';
-import { collectEffects } from 'onelife-game/logic/effectEngine.js';
-import { heroClasses } from 'onelife-game/logic/content.js';
-import { getActiveRelics } from 'onelife-game/logic/relics.js';
+} from './logic/hero.js';
+import { collectEffects } from './logic/effectEngine.js';
+import { heroClasses } from './logic/content.js';
+import { getActiveRelics } from './logic/relics.js';
 
 function getClassDef(classId = null) {
   const raw = `${classId || ''}`.trim();

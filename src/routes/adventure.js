@@ -3,9 +3,9 @@
 const pool = require('../db/pool');
 
 // Start loading ESM game modules immediately (loaded once, reused)
-const adventureModP = import('onelife-game/logic/adventure.js');
-const lootModP      = import('onelife-game/logic/loot.js');
-const heroModP      = import('onelife-game/logic/hero.js');
+const adventureModP = import('../game/logic/adventure.js');
+const lootModP      = import('../game/logic/loot.js');
+const heroModP      = import('../game/logic/hero.js');
 
 async function getActiveSession(userId) {
   const r = await pool.query(
