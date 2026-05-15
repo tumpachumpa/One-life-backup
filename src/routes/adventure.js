@@ -1,0 +1,287 @@
+'use strict';
+
+const pool = require('../db/pool');
+
+// Start loading ESM game modules immediately (loaded once, reused)
+const adventureModP = import('../game/logic/adventure.js');
+const lootModP      = import('../game/logic/loot.js');
+
+async function getActiveSession(userId) {
+  const r = await pool.query(
+    `SELECT * FROM adventure_sessions
+     WHERE user_id = $1 AND status = 'active'
+     ORDER BY created_at DESC LIMIT 1`,
+    [userId]
+  );
+  return r.rows[0] || null;
+}
+
+async function adventureRoutes(fastify) {
+
+  // POST /adventure/start — begin a new run for the given adventureId
+  fastify.post('/adventure/start', { preHandler: fastify.authenticate }, async (request, reply) => {
+    const { id: userId } = request.user;
+    const { adventureId, difficultyStars } = request.body;
+    if (!adventureId) return reply.status(400).send({ error: 'Missing adventureId' });
+
+    const {
+      getAdventure,
+      createInitialAdventureProgress,
+      normalizeAdventureProgress,
+      startAdventureProgress,
+      getAdventureChoiceNodes,
+      getAdventureStatus,
+    } = await adventureModP;
+
+    const adventure = getAdventure(adventureId);
+    if (!adventure) return reply.status(404).send({ error: 'Adventure not found' });
+
+    // Abandon any lingering active session for this user
+    await pool.query(
+      `UPDATE adventure_sessions SET status = 'abandoned', updated_at = NOW()
+       WHERE user_id = $1 AND status = 'active'`,
+      [userId]
+    );
+
+    // Load the hero's saved adventure progress
+    const heroResult = await pool.query('SELECT save_data FROM heroes WHERE user_id = $1', [userId]);
+    const saveData = heroResult.rows[0]?.save_data || {};
+    const adventureProgress = saveData.adventureProgress || {};
+    const existing = adventureProgress[adventureId] || null;
+
+    const base = normalizeAdventureProgress(
+      adventure,
+      existing || createInitialAdventureProgress(adventure)
+    );
+    const started = startAdventureProgress(
+      adventure,
+      base,
+      difficultyStars != null ? difficultyStars : null
+    );
+
+    const choices = getAdventureChoiceNodes(adventure, started);
+    const status  = getAdventureStatus(adventure, started);
+
+    const sessionResult = await pool.query(
+      `INSERT INTO adventure_sessions
+         (user_id, adventure_id, status, progress, hero_snap, run_loot, run_xp, run_gold)
+       VALUES ($1, $2, 'active', $3, $4, '[]', 0, 0)
+       RETURNING id`,
+      [userId, adventureId, JSON.stringify(started), JSON.stringify(saveData.hero || null)]
+    );
+    const sessionId = sessionResult.rows[0].id;
+
+    return {
+      sessionId,
+      adventureId,
+      progress: started,
+      choices,
+      status,
+      adventure: { id: adventure.id, name: adventure.name, zoneId: adventure.zoneId },
+    };
+  });
+
+  // GET /adventure/current — reconnect to the active session
+  fastify.get('/adventure/current', { preHandler: fastify.authenticate }, async (request, reply) => {
+    const { id: userId } = request.user;
+    const session = await getActiveSession(userId);
+    if (!session) return reply.status(404).send({ error: 'No active adventure' });
+
+    const { getAdventure, getAdventureChoiceNodes, getAdventureStatus } = await adventureModP;
+
+    const adventure = getAdventure(session.adventure_id);
+    if (!adventure) return reply.status(404).send({ error: 'Adventure not found' });
+
+    const progress = session.progress;
+    return {
+      sessionId: session.id,
+      adventureId: session.adventure_id,
+      progress,
+      choices:  getAdventureChoiceNodes(adventure, progress),
+      status:   getAdventureStatus(adventure, progress),
+      runLoot:  session.run_loot  || [],
+      runXp:    session.run_xp    || 0,
+      runGold:  session.run_gold  || 0,
+    };
+  });
+
+  // POST /adventure/select-node — player taps a node to navigate to
+  fastify.post('/adventure/select-node', { preHandler: fastify.authenticate }, async (request, reply) => {
+    const { id: userId } = request.user;
+    const { nodeId } = request.body;
+    if (!nodeId) return reply.status(400).send({ error: 'Missing nodeId' });
+
+    const session = await getActiveSession(userId);
+    if (!session) return reply.status(404).send({ error: 'No active adventure' });
+
+    const {
+      getAdventure,
+      getNode,
+      selectNode,
+      resolveAdventureNode,
+      getAdventureChoiceNodes,
+    } = await adventureModP;
+
+    const adventure = getAdventure(session.adventure_id);
+    if (!adventure) return reply.status(404).send({ error: 'Adventure not found' });
+
+    const progress    = session.progress;
+    const newProgress = selectNode(adventure, progress, nodeId);
+    const { node }    = getNode(adventure, nodeId, newProgress);
+
+    const totalCombats = (progress.completedNodes || []).length;
+    const encounter = node
+      ? resolveAdventureNode({ ...adventure, __progress: newProgress }, node, totalCombats)
+      : null;
+
+    await pool.query(
+      `UPDATE adventure_sessions SET progress = $1, updated_at = NOW() WHERE id = $2`,
+      [JSON.stringify(newProgress), session.id]
+    );
+
+    return {
+      progress: newProgress,
+      encounter,
+      choices: getAdventureChoiceNodes(adventure, newProgress),
+    };
+  });
+
+  // POST /adventure/complete-node — node finished (combat won or event resolved)
+  fastify.post('/adventure/complete-node', { preHandler: fastify.authenticate }, async (request, reply) => {
+    const { id: userId } = request.user;
+    const { nodeId, xpGained = 0, goldGained = 0, lootItems = [] } = request.body;
+    if (!nodeId) return reply.status(400).send({ error: 'Missing nodeId' });
+
+    const session = await getActiveSession(userId);
+    if (!session) return reply.status(404).send({ error: 'No active adventure' });
+
+    const {
+      getAdventure,
+      completeNode,
+      getAdventureChoiceNodes,
+      getAdventureStatus,
+    } = await adventureModP;
+
+    const adventure = getAdventure(session.adventure_id);
+    if (!adventure) return reply.status(404).send({ error: 'Adventure not found' });
+
+    const progress    = session.progress;
+    const newProgress = completeNode(adventure, progress, nodeId);
+
+    const runLoot  = [...(session.run_loot || []), ...lootItems];
+    const runXp    = (session.run_xp  || 0) + xpGained;
+    const runGold  = (session.run_gold || 0) + goldGained;
+    const complete = !!newProgress.bossCompleted;
+    const newStatus = complete ? 'completed' : 'active';
+
+    await pool.query(
+      `UPDATE adventure_sessions
+       SET progress = $1, run_loot = $2, run_xp = $3, run_gold = $4, status = $5, updated_at = NOW()
+       WHERE id = $6`,
+      [JSON.stringify(newProgress), JSON.stringify(runLoot), runXp, runGold, newStatus, session.id]
+    );
+
+    return {
+      progress: newProgress,
+      choices:  complete ? [] : getAdventureChoiceNodes(adventure, newProgress),
+      status:   getAdventureStatus(adventure, newProgress),
+      runLoot,
+      runXp,
+      runGold,
+      complete,
+    };
+  });
+
+  // POST /adventure/fail-node — player died, abandon the run
+  fastify.post('/adventure/fail-node', { preHandler: fastify.authenticate }, async (request, reply) => {
+    const { id: userId } = request.user;
+
+    const session = await getActiveSession(userId);
+    if (!session) return reply.status(404).send({ error: 'No active adventure' });
+
+    const { getAdventure, revertAdventureOnDeath } = await adventureModP;
+
+    const adventure = getAdventure(session.adventure_id);
+    const progress  = session.progress;
+    const reverted  = adventure ? revertAdventureOnDeath(adventure, progress) : progress;
+
+    await pool.query(
+      `UPDATE adventure_sessions
+       SET progress = $1, status = 'abandoned', updated_at = NOW()
+       WHERE id = $2`,
+      [JSON.stringify(reverted), session.id]
+    );
+
+    return { progress: reverted, abandoned: true };
+  });
+
+  // POST /adventure/complete — apply run rewards to the hero atomically
+  fastify.post('/adventure/complete', { preHandler: fastify.authenticate }, async (request, reply) => {
+    const { id: userId } = request.user;
+
+    const r = await pool.query(
+      `SELECT * FROM adventure_sessions
+       WHERE user_id = $1 AND status IN ('active', 'completed')
+       ORDER BY updated_at DESC LIMIT 1`,
+      [userId]
+    );
+    const session = r.rows[0];
+    if (!session) return reply.status(404).send({ error: 'No session to finalize' });
+
+    const { getAdventure, finishAdventureRunProgress } = await adventureModP;
+
+    const adventure = getAdventure(session.adventure_id);
+    if (!adventure) return reply.status(404).send({ error: 'Adventure not found' });
+
+    const heroResult = await pool.query('SELECT save_data FROM heroes WHERE user_id = $1', [userId]);
+    const saveData   = heroResult.rows[0]?.save_data || {};
+
+    // Merge adventure-progress unlock
+    const advProgress    = saveData.adventureProgress || {};
+    const newAdvProgress = finishAdventureRunProgress(
+      { ...advProgress, [session.adventure_id]: session.progress },
+      adventure,
+      { completedDifficultyStars: session.progress?.activeDifficultyStars ?? 0 }
+    );
+
+    // Apply XP, gold, loot
+    saveData.hero = saveData.hero || {};
+    saveData.hero.xp   = (saveData.hero.xp   || 0) + (session.run_xp   || 0);
+    saveData.hero.gold = (saveData.hero.gold  || 0) + (session.run_gold || 0);
+    saveData.adventureProgress = newAdvProgress;
+
+    if (session.run_loot?.length) {
+      saveData.pendingLoot = [...(saveData.pendingLoot || []), ...session.run_loot];
+    }
+
+    await pool.query(
+      `UPDATE heroes SET save_data = $1, updated_at = NOW() WHERE user_id = $2`,
+      [saveData, userId]
+    );
+    await pool.query(
+      `UPDATE adventure_sessions SET status = 'finalized', updated_at = NOW() WHERE id = $1`,
+      [session.id]
+    );
+
+    return {
+      ok: true,
+      runXp:    session.run_xp   || 0,
+      runGold:  session.run_gold || 0,
+      loot:     session.run_loot || [],
+      adventureProgress: newAdvProgress,
+    };
+  });
+
+  // DELETE /adventure/current — abandon the active session
+  fastify.delete('/adventure/current', { preHandler: fastify.authenticate }, async (request, reply) => {
+    const { id: userId } = request.user;
+    await pool.query(
+      `UPDATE adventure_sessions SET status = 'abandoned', updated_at = NOW()
+       WHERE user_id = $1 AND status = 'active'`,
+      [userId]
+    );
+    return { ok: true };
+  });
+}
+
+module.exports = adventureRoutes;

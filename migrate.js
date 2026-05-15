@@ -17,6 +17,7 @@ const MIGRATIONS = [
   'src/db/migrations/009_fix_pending_loot_column.sql',
   'src/db/migrations/010_fight_seed.sql',
   'src/db/migrations/011_defender_snap.sql',
+  'src/db/migrations/012_adventure_sessions.sql',
 ];
 
 async function run() {
