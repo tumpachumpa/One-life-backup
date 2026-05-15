@@ -1,0 +1,2 @@
+ALTER TABLE camps ADD COLUMN IF NOT EXISTS combat_snap JSONB;
+ALTER TABLE pvp_challenges ADD COLUMN IF NOT EXISTS challenger_snap JSONB;
