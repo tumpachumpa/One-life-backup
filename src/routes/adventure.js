@@ -233,10 +233,11 @@ async function adventureRoutes(fastify) {
     const adventure = getAdventure(session.adventure_id);
     if (!adventure) return reply.status(404).send({ error: 'Adventure not found' });
 
+    // Client applies XP/gold/loot locally and saves via POST /hero.
+    // Server only updates adventureProgress (difficulty unlocks, boss completion).
     const heroResult = await pool.query('SELECT save_data FROM heroes WHERE user_id = $1', [userId]);
     const saveData   = heroResult.rows[0]?.save_data || {};
 
-    // Merge adventure-progress unlock
     const advProgress    = saveData.adventureProgress || {};
     const newAdvProgress = finishAdventureRunProgress(
       { ...advProgress, [session.adventure_id]: session.progress },
@@ -244,15 +245,7 @@ async function adventureRoutes(fastify) {
       { completedDifficultyStars: session.progress?.activeDifficultyStars ?? 0 }
     );
 
-    // Apply XP, gold, loot
-    saveData.hero = saveData.hero || {};
-    saveData.hero.xp   = (saveData.hero.xp   || 0) + (session.run_xp   || 0);
-    saveData.hero.gold = (saveData.hero.gold  || 0) + (session.run_gold || 0);
     saveData.adventureProgress = newAdvProgress;
-
-    if (session.run_loot?.length) {
-      saveData.pendingLoot = [...(saveData.pendingLoot || []), ...session.run_loot];
-    }
 
     await pool.query(
       `UPDATE heroes SET save_data = $1, updated_at = NOW() WHERE user_id = $2`,
