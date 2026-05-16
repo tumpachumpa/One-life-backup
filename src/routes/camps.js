@@ -241,6 +241,21 @@ async function campRoutes(fastify) {
   fastify.get('/camps/my-status', { preHandler: fastify.authenticate }, async (request) => {
     const { id } = request.user;
 
+    // If mutual pending challenges exist for the same pair (race condition before the
+    // normalized-pair index was applied), cancel the newer one so only the older survives.
+    await pool.query(`
+      UPDATE pvp_challenges SET status = 'cancelled'
+      WHERE status = 'pending'
+        AND (defender_id = $1 OR challenger_id = $1)
+        AND EXISTS (
+          SELECT 1 FROM pvp_challenges older
+          WHERE older.challenger_id = pvp_challenges.defender_id
+            AND older.defender_id   = pvp_challenges.challenger_id
+            AND older.status IN ('pending','prep')
+            AND older.id < pvp_challenges.id
+        )
+    `, [id]);
+
     // Auto-transition pending challenges to prep when the defender is no longer
     // actively inside the adventure (in_adventure=false, expired, or camp gone).
     await pool.query(`
@@ -415,19 +430,35 @@ async function campRoutes(fastify) {
       };
     }
 
-    // If an active challenge for this exact pair already exists, return it (idempotent)
+    // If the opponent already challenged us, convert both into an immediate fight instead of 409.
     const reciprocalResult = await pool.query(
       `SELECT id FROM pvp_challenges
        WHERE challenger_id = $2 AND defender_id = $1
          AND status IN ('pending','prep')
-         AND queued_at > NOW() - INTERVAL '5 minutes'`,
+         AND queued_at > NOW() - INTERVAL '35 minutes'`,
       [challengerId, defenderUserId]
     );
     if (reciprocalResult.rows[0]) {
-      return reply.status(409).send({
-        error: 'ACTIVE_RECIPROCAL_CHALLENGE',
-        message: 'This player already challenged you. Finish that challenge first.',
-      });
+      await pool.query(`UPDATE pvp_challenges SET status = 'cancelled' WHERE id = $1`, [reciprocalResult.rows[0].id]);
+      await pool.query(
+        `UPDATE pvp_challenges SET status = 'cancelled' WHERE challenger_id = $1 AND status IN ('pending','prep')`,
+        [challengerId]
+      );
+      const fightInsert = await pool.query(`
+        INSERT INTO pvp_challenges (challenger_id, defender_id, adventure_id, status, prep_started_at, challenger_snap, fight_seed, defender_snap)
+        VALUES ($1, $2, $3, 'prep', NOW(), $4, FLOOR(RANDOM() * 4294967296)::BIGINT,
+               (SELECT combat_snap FROM camps WHERE user_id = $2 LIMIT 1))
+        RETURNING id, prep_started_at, fight_seed
+      `, [challengerId, defenderUserId, camp.adventure_id, snapJson]);
+      return {
+        ok: true,
+        overwrite: true,
+        fightChallengeId: fightInsert.rows[0].id,
+        prepStartedAt: fightInsert.rows[0].prep_started_at,
+        fightSeed: fightInsert.rows[0].fight_seed != null ? Number(fightInsert.rows[0].fight_seed) : null,
+        cancelledChallengerId: String(defenderUserId),
+        cancelledChallengerName: defResult.rows[0]?.save_data?.hero?.name || null,
+      };
     }
 
     const existingResult = await pool.query(
@@ -455,12 +486,75 @@ async function campRoutes(fastify) {
       [challengerId]
     );
 
-    // Create challenge as pending — prep countdown starts only when the defender exits the adventure
+    // Last-chance cancel: if the opponent's challenge slipped in after our
+    // reciprocal check but before our INSERT, cancel it now so our INSERT wins
+    // and they pick up the fight on their next poll.
+    await pool.query(
+      `UPDATE pvp_challenges SET status = 'cancelled'
+       WHERE challenger_id = $2 AND defender_id = $1
+         AND status IN ('pending','prep')`,
+      [challengerId, defenderUserId]
+    );
+
+    // ON CONFLICT DO NOTHING guards against the race where the opponent sent a challenge
+    // simultaneously and their INSERT committed just before ours (normalized-pair unique index).
     const insert = await pool.query(`
       INSERT INTO pvp_challenges (challenger_id, defender_id, adventure_id, status, challenger_snap)
       VALUES ($1, $2, $3, 'pending', $4)
+      ON CONFLICT DO NOTHING
       RETURNING id
     `, [challengerId, defenderUserId, camp.adventure_id, snapJson]);
+
+    if (!insert.rows[0]) {
+      // Concurrent reciprocal challenge slipped in — find it and convert to a fight
+      const raceResult = await pool.query(
+        `SELECT id FROM pvp_challenges
+         WHERE challenger_id = $2 AND defender_id = $1
+           AND status IN ('pending','prep')`,
+        [challengerId, defenderUserId]
+      );
+      if (raceResult.rows[0]) {
+        await pool.query(`UPDATE pvp_challenges SET status = 'cancelled' WHERE id = $1`, [raceResult.rows[0].id]);
+        const fightInsert = await pool.query(`
+          INSERT INTO pvp_challenges (challenger_id, defender_id, adventure_id, status, prep_started_at, challenger_snap, fight_seed, defender_snap)
+          VALUES ($1, $2, $3, 'prep', NOW(), $4, FLOOR(RANDOM() * 4294967296)::BIGINT,
+                 (SELECT combat_snap FROM camps WHERE user_id = $2 LIMIT 1))
+          RETURNING id, prep_started_at, fight_seed
+        `, [challengerId, defenderUserId, camp.adventure_id, snapJson]);
+        return {
+          ok: true,
+          overwrite: true,
+          fightChallengeId: fightInsert.rows[0].id,
+          prepStartedAt: fightInsert.rows[0].prep_started_at,
+          fightSeed: fightInsert.rows[0].fight_seed != null ? Number(fightInsert.rows[0].fight_seed) : null,
+          cancelledChallengerId: String(defenderUserId),
+          cancelledChallengerName: defResult.rows[0]?.save_data?.hero?.name || null,
+        };
+      }
+      return reply.status(409).send({ error: 'CHALLENGE_CONFLICT', message: 'Challenge conflict — please try again.' });
+    }
+
+    // If the defender is not currently inside their adventure, skip the
+    // "waiting" phase and advance straight to prep so the challenger sees
+    // the countdown immediately rather than the holding message.
+    if (!camp.in_adventure) {
+      const prepResult = await pool.query(`
+        UPDATE pvp_challenges
+           SET status = 'prep', prep_started_at = NOW(),
+               fight_seed = FLOOR(RANDOM() * 4294967296)::BIGINT,
+               defender_snap = (SELECT combat_snap FROM camps WHERE user_id = $2 LIMIT 1)
+         WHERE id = $1
+        RETURNING id, prep_started_at, fight_seed
+      `, [insert.rows[0].id, defenderUserId]);
+      const pr = prepResult.rows[0];
+      return {
+        ok: true,
+        challengeId: pr.id,
+        status: 'prep',
+        prepStartedAt: pr.prep_started_at,
+        fightSeed: pr.fight_seed != null ? Number(pr.fight_seed) : null,
+      };
+    }
 
     return { ok: true, challengeId: insert.rows[0].id, status: 'pending' };
   });

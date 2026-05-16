@@ -3,7 +3,11 @@ const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  connectionTimeoutMillis: 3000,
+  max: 1,
+});
 
 const MIGRATIONS = [
   'src/db/migrations/001_base.sql',
@@ -23,6 +27,14 @@ const MIGRATIONS = [
 ];
 
 async function run() {
+  // Fast connectivity check — if DB is unreachable, skip all migrations so
+  // server.js can still start within Railway's healthcheck window.
+  try {
+    await pool.query('SELECT 1');
+  } catch {
+    console.log('DB unreachable at startup, skipping migrations.');
+    return;
+  }
   for (const file of MIGRATIONS) {
     const sql = fs.readFileSync(path.join(__dirname, file), 'utf8');
     try {
@@ -32,7 +44,8 @@ async function run() {
       console.error(`${file} failed:`, err.message);
     }
   }
-  await pool.end();
 }
 
-run();
+run()
+  .catch(err => console.error('Migration fatal:', err.message))
+  .finally(() => pool.end().catch(() => null).then(() => process.exit(0)));
