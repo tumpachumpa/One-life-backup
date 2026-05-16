@@ -105,68 +105,94 @@ async function applyPendingLoot(saveData, userId) {
   return true;
 }
 
+const VALID_SLOT_IDS = new Set(['slot_1', 'slot_2', 'slot_3']);
+
 async function heroRoutes(fastify) {
-  // GET /hero — load hero save and apply passive income
+  // GET /hero — return all saved slots for this user as { slots: { slot_1: {...}, ... } }
   fastify.get('/hero', { preHandler: fastify.authenticate }, async (request) => {
     const { id } = request.user;
-    const result = await pool.query('SELECT save_data FROM heroes WHERE user_id = $1', [id]);
-    if (!result.rows[0]) return { hero: null };
+    const result = await pool.query(
+      'SELECT slot_id, save_data, updated_at FROM heroes WHERE user_id = $1',
+      [id]
+    );
+    if (!result.rows.length) return { slots: {} };
 
-    const hero = result.rows[0].save_data;
-    let dirty = false;
+    const slots = {};
+    let dirtySlotId = null;
 
-    // Apply passive essence income from tile claim
+    // Apply passive essence income from tile claim (applied to most-recently-updated slot)
     const claimResult = await pool.query(
       `SELECT last_income_at FROM tile_claims WHERE user_id = $1 AND last_active > NOW() - INTERVAL '5 days'`,
       [id]
     );
+    let earnedGold = 0;
     if (claimResult.rows[0]) {
       const lastIncome = new Date(claimResult.rows[0].last_income_at);
       const hoursElapsed = Math.floor((Date.now() - lastIncome.getTime()) / (1000 * 60 * 60));
       if (hoursElapsed > 0) {
-        const earned = hoursElapsed * ESSENCE_PER_HOUR;
-        hero.hero = hero.hero || {};
-        hero.hero.gold = (hero.hero?.gold || 0) + earned;
+        earnedGold = hoursElapsed * ESSENCE_PER_HOUR;
         await pool.query(
           `UPDATE tile_claims SET last_income_at = last_income_at + ($1 * INTERVAL '1 hour') WHERE user_id = $2`,
           [hoursElapsed, id]
         );
-        dirty = true;
       }
     }
 
-    if (dirty) {
-      await pool.query('UPDATE heroes SET save_data = $1, updated_at = NOW() WHERE user_id = $2', [hero, id]);
+    // Sort by updated_at descending so the most-recent slot gets the gold
+    const sorted = [...result.rows].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+    for (const row of sorted) {
+      const data = row.save_data;
+      if (earnedGold > 0 && !dirtySlotId) {
+        data.hero = data.hero || {};
+        data.hero.gold = (data.hero.gold || 0) + earnedGold;
+        dirtySlotId = row.slot_id;
+      }
+      slots[row.slot_id] = data;
     }
 
-    return { hero };
+    if (dirtySlotId) {
+      await pool.query(
+        'UPDATE heroes SET save_data = $1, updated_at = NOW() WHERE user_id = $2 AND slot_id = $3',
+        [slots[dirtySlotId], id, dirtySlotId]
+      );
+    }
+
+    return { slots };
   });
 
-  // POST /hero — save hero, applying any pending PvP changes before persisting.
-  // Returns appliedHero (inner hero object) when pending removals were applied so
-  // the client can update its state and avoid overwriting the removal on the next save.
+  // POST /hero — save a single slot, applying any pending PvP changes before persisting.
   fastify.post('/hero', { preHandler: fastify.authenticate }, async (request, reply) => {
     const { id } = request.user;
-    const { hero } = request.body;
+    const { hero, slot_id: slotId = 'slot_1' } = request.body;
     if (!hero) return reply.status(400).send({ error: 'Missing hero data' });
+    if (!VALID_SLOT_IDS.has(slotId)) return reply.status(400).send({ error: 'Invalid slot_id' });
 
-    // encounterCharges is now server-managed — strip it so old clients can't overwrite server state
+    // encounterCharges is server-managed — strip so old clients can't overwrite
     if (hero.hero) delete hero.hero.encounterCharges;
 
     const removalsApplied = await applyPendingRemovals(hero, id);
     const lootApplied = await applyPendingLoot(hero, id);
 
     await pool.query(
-      `INSERT INTO heroes (user_id, save_data, updated_at)
-       VALUES ($1, $2, NOW())
-       ON CONFLICT (user_id) DO UPDATE SET save_data = $2, updated_at = NOW()`,
-      [id, hero]
+      `INSERT INTO heroes (user_id, slot_id, save_data, updated_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (user_id, slot_id) DO UPDATE SET save_data = $3, updated_at = NOW()`,
+      [id, slotId, hero]
     );
     return {
       ok: true,
       ...(removalsApplied ? { appliedHero: hero.hero } : {}),
       ...(lootApplied ? { appliedPendingLoot: hero.pendingLoot || [] } : {}),
     };
+  });
+
+  // DELETE /hero/:slotId — remove a specific save slot
+  fastify.delete('/hero/:slotId', { preHandler: fastify.authenticate }, async (request, reply) => {
+    const { id } = request.user;
+    const { slotId } = request.params;
+    if (!VALID_SLOT_IDS.has(slotId)) return reply.status(400).send({ error: 'Invalid slot_id' });
+    await pool.query('DELETE FROM heroes WHERE user_id = $1 AND slot_id = $2', [id, slotId]);
+    return { ok: true };
   });
 }
 
