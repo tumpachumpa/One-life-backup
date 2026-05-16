@@ -3901,7 +3901,7 @@ function resolveBasicAttackImpact(action, attacker, defender, tick, log, rng, he
       applyLifeDrain(attacker, result.damage, tick, log, hero, enemy);
       tryApplyOnHitEffects(enemy, hero, tick, log, rng, heroConditions, action, { allowBleed: result.damage > 0, allowPoison: result.damage > 0, procRng });
       tryCounter(hero, enemy, tick, log, rng, hero, enemy);
-      maybeInflictDeepCut(enemy, hero, result.damage, false, tick, log, heroWounds, rng);
+      maybeInflictDeepCut(enemy, hero, result.damage, false, tick, log, heroWounds, procRng);
     }
   } else {
     if (attackerIsHero) {
@@ -3961,7 +3961,7 @@ function resolveBasicAttackImpact(action, attacker, defender, tick, log, rng, he
       if (applied.damage > 0) trackPetFlankingHit(hero, hero, procState, tick, log, defender);
       if (!action.skipDoubleHit && enemy.hp > 0) {
         const doubleHitChance = getDoubleHitChancePct(hero);
-        if (doubleHitChance > 0 && procRng() * 100 < doubleHitChance) {
+        if (doubleHitChance > 0 && rng() * 100 < doubleHitChance) {
           const bonusAttack = {
             ...createBasicAttackImpact(hero, enemy, tick, rng, ACTION.BASIC_ATTACK, opts),
             skipDoubleHit: true,
@@ -4094,7 +4094,19 @@ function resolveBasicAttackImpact(action, attacker, defender, tick, log, rng, he
       tryAddRapidFireCritCharge(enemy, action);
       tryApplyOnHitEffects(enemy, hero, tick, log, rng, heroConditions, action, { procRng });
       tryCounter(hero, enemy, tick, log, rng, hero, enemy);
-      maybeInflictDeepCut(enemy, hero, incomingDamage, !!action.isCrit, tick, log, heroWounds, rng);
+      maybeInflictDeepCut(enemy, hero, incomingDamage, !!action.isCrit, tick, log, heroWounds, procRng);
+      if (!action.skipDoubleHit && hero.hp > 0) {
+        const doubleHitChance = getDoubleHitChancePct(enemy);
+        if (doubleHitChance > 0 && rng() * 100 < doubleHitChance) {
+          const bonusAttack = {
+            ...createBasicAttackImpact(enemy, hero, tick, rng, ACTION.BASIC_ATTACK, opts),
+            skipDoubleHit: true,
+            extraHit: true,
+            extraHitSource: 'double_hit',
+          };
+          resolveBasicAttackImpact(bonusAttack, enemy, hero, tick, log, rng, hero, enemy, heroResources, heroConditions, heroWounds, procState, heroProcNodes, opts);
+        }
+      }
       if (procState) {
         procState.hasTakenDamageThisFight = true;
         procState.consecutiveBlocks = 0;
