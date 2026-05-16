@@ -4352,14 +4352,16 @@ function getOnHitEffects(attacker, action = null) {
 function tryApplyOnHitEffects(attacker, defender, tick, log, rng, heroConditions, action = null, options = {}) {
   const targetMeta = { targetId: defender?.id || null };
   const attackerIsPlayerSide = isPlayerSideCombatant(attacker);
-  // Keep procRng available for callers that pass it, but on-hit chance rolls
-  // must use shared rng() so both duel screens consume the same sequence and
-  // agree on whether each effect fires (stagger, daze, blind, bleed, etc.).
+  // On-hit chance rolls use shared rng() so both duel screens consume the same
+  // sequence and agree on whether each effect fires (stagger, daze, blind, etc.).
+  // Effects with no chance (passive stat bonuses, etc.) are skipped without
+  // consuming rng() at all — otherwise every passive entry shifts the sequence.
   const procRng = options.procRng || rng;
   for (const effect of getOnHitEffects(attacker, action)) {
     if (effect.type === 'bleed_on_hit' && options.allowBleed === false) continue;
     if (effect.type === 'poison_on_hit' && options.allowPoison === false) continue;
-    if (rng() * 100 >= (effect.chance || 0)) continue;
+    if (!(effect.chance > 0)) continue;
+    if (rng() * 100 >= effect.chance) continue;
     if (effect.type === 'daze_on_hit') {
       defender.activeEffects = (defender.activeEffects || []).filter(active => active.type !== 'daze');
       defender.activeEffects.push({
