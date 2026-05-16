@@ -18,6 +18,8 @@ const MIGRATIONS = [
   'src/db/migrations/010_fight_seed.sql',
   'src/db/migrations/011_defender_snap.sql',
   'src/db/migrations/012_adventure_sessions.sql',
+  'src/db/migrations/013_pvp_normalized_pair.sql',
+  'src/db/migrations/014_encounter_charges.sql',
 ];
 
 async function run() {

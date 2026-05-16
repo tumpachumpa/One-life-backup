@@ -150,6 +150,9 @@ async function heroRoutes(fastify) {
     const { hero } = request.body;
     if (!hero) return reply.status(400).send({ error: 'Missing hero data' });
 
+    // encounterCharges is now server-managed — strip it so old clients can't overwrite server state
+    if (hero.hero) delete hero.hero.encounterCharges;
+
     const removalsApplied = await applyPendingRemovals(hero, id);
     const lootApplied = await applyPendingLoot(hero, id);
 
