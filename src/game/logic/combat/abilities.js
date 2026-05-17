@@ -706,7 +706,9 @@ export function resolveAbilityImpact(action, attacker, defender, tick, rng, cont
       const base = Math.max(1, attacker.damage + variance);
       const empowered = spellDamage(attacker, Math.floor(base * ability.damageMult));
       const critChance = getEffectiveCritChance(ability.critChance || 0, defender);
-      const isCrit = critChance > 0 && rng() * 100 < critChance;
+      const forcedNextCrit = !!(attacker.isPlayer && context.procState?.forcedNextCrit);
+      if (forcedNextCrit) context.procState.forcedNextCrit = false;
+      const isCrit = forcedNextCrit || (critChance > 0 && rng() * 100 < critChance);
       const finalDmg = isCrit ? Math.floor(empowered * 1.5) : empowered;
       const result = resolvePhysicalImpact(attacker, defender, applyLowHpDamageBonuses(attacker, defender, finalDmg), rng, ability);
       if (result.dodged) {
@@ -2006,6 +2008,58 @@ export function resolveAbilityImpact(action, attacker, defender, tick, rng, cont
           ? `${ability.name}: you reduce incoming damage by ${ability.reductionPct || 35}% ${durationText}.`
           : `${attacker.name} braces - takes ${ability.reductionPct || 35}% less damage ${durationText}.`,
         damage: 0,
+      });
+      break;
+    }
+
+    case 'force_next_crit': {
+      if (attacker.isPlayer && context.procState) {
+        context.procState.forcedNextCrit = true;
+        entries.push({
+          type: 'ability',
+          text: `${ability.name}: your next hit is guaranteed to critically strike!`,
+          damage: 0,
+        });
+      }
+      break;
+    }
+
+    case 'detonate_marks': {
+      if (!defender || defender.hp <= 0) break;
+      const markEff = (defender.activeEffects || []).find(e => e.type === 'shadow_mark');
+      const markStacks = markEff?.stacks || 0;
+      if (markStacks <= 0) {
+        entries.push({ type: 'ability_fail', text: `${ability.name}: no Shadow Marks to detonate!`, damage: 0 });
+        break;
+      }
+      const currentEnergy = context.procState?.energy || 0;
+      const damagePerMark = ability.damagePerMark || 0.5;
+      const bonusPctPerMark = (attacker.passiveEffects || []).reduce((sum, e) => e.type === 'detonate_base_pct_per_mark' ? sum + (e.value || 0) : sum, 0);
+      const bonusDmgPerMark = bonusPctPerMark > 0 ? Math.floor(attacker.damage * bonusPctPerMark / 100) : 0;
+      const baseDmg = Math.max(1, Math.floor(attacker.damage * damagePerMark * markStacks) + bonusDmgPerMark * markStacks);
+      defender.hp = Math.max(0, defender.hp - baseDmg);
+      // Remove shadow marks
+      defender.activeEffects = (defender.activeEffects || []).filter(e => e.type !== 'shadow_mark');
+      const vuln = ability.vulnerable;
+      if (vuln && currentEnergy >= (vuln.minEnergy || 60)) {
+        defender.activeEffects = (defender.activeEffects || [])
+          .filter(e => !(e.type === 'damage_taken_bonus_pct' && e.source === 'detonate'));
+        defender.activeEffects.push({
+          type: 'damage_taken_bonus_pct',
+          value: vuln.damageTakenPct || 15,
+          remainingTicks: vuln.durationTicks || 5,
+          source: 'detonate',
+        });
+      }
+      const stun = ability.stun;
+      if (stun && currentEnergy >= (stun.minEnergy || 80)) {
+        defender.stunUntilTick = Math.max(defender.stunUntilTick || -1, tick + (stun.ticks || 1));
+      }
+      const energyText = currentEnergy >= 80 ? ' (Vulnerable + Stun!)' : currentEnergy >= 60 ? ' (Vulnerable!)' : '';
+      entries.push({
+        type: 'ability',
+        text: `${ability.name}: ${markStacks} marks detonate for ${baseDmg} damage!${energyText}`,
+        damage: baseDmg,
       });
       break;
     }

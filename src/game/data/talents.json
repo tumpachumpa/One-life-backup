@@ -1,5 +1,5 @@
 {
-  "schema": 5,
+  "schema": 6,
   "trees": [
     {
       "id": "fighter",
@@ -447,209 +447,6 @@
           ]
         },
         {
-          "id": "duelist",
-          "name": "Duelist",
-          "pointType": "talent",
-          "theme": "precision",
-          "description": "Parry to build Blade Stacks, release through crits. Patience charges your crit on misses. Chain parries and crits to enter Flow State.",
-          "tiers": [
-            {
-              "tier": 1,
-              "title": "Foundation",
-              "choices": [
-                {
-                  "id": "duelist_blade_stack",
-                  "name": "Blade Stack",
-                  "summary": [
-                    "+1 Blade Stack on each parry (max 5). Each stack = +6% crit chance"
-                  ],
-                  "proc": {
-                    "trigger": "on_parry",
-                    "chance": 100,
-                    "condition": null,
-                    "effect": {
-                      "type": "gain_blade_stack",
-                      "value": 1
-                    }
-                  }
-                },
-                {
-                  "id": "duelist_counter_stance",
-                  "name": "Counter Stance",
-                  "summary": [
-                    "On parry: your next hit deals +80% damage"
-                  ],
-                  "proc": {
-                    "trigger": "on_parry",
-                    "chance": 100,
-                    "condition": null,
-                    "effect": {
-                      "type": "gain_crit_chance_pct",
-                      "value": 40,
-                      "durationTicks": 1
-                    }
-                  }
-                },
-                {
-                  "id": "duelist_patience",
-                  "name": "Patience",
-                  "summary": [
-                    "On miss: +8% crit chance until next hit (stacks up to +40%)"
-                  ],
-                  "proc": {
-                    "trigger": "on_miss",
-                    "chance": 100,
-                    "condition": null,
-                    "effect": {
-                      "type": "gain_crit_chance_pct",
-                      "value": 8,
-                      "durationTicks": 999
-                    }
-                  }
-                }
-              ]
-            },
-            {
-              "tier": 2,
-              "title": "Mastery",
-              "choices": [
-                {
-                  "id": "duelist_steel_mirror",
-                  "name": "Steel Mirror",
-                  "summary": [
-                    "On parry: 25% chance to stun the enemy for 1 second"
-                  ],
-                  "proc": {
-                    "trigger": "on_parry",
-                    "chance": 25,
-                    "condition": null,
-                    "effect": {
-                      "type": "stun_enemy",
-                      "ticks": 1
-                    }
-                  }
-                },
-                {
-                  "id": "duelist_thousand_cuts",
-                  "name": "Thousand Cuts",
-                  "summary": [
-                    "On crit at 5 Blade Stacks: fire 4 rapid hits at 35% damage each, then clear all Blade Stacks"
-                  ],
-                  "proc": {
-                    "trigger": "on_crit",
-                    "chance": 100,
-                    "condition": {
-                      "blade_stacks_eq": 5
-                    },
-                    "effect": {
-                      "type": "thousand_cuts",
-                      "hits": 4,
-                      "damageMult": 0.35
-                    }
-                  }
-                },
-                {
-                  "id": "duelist_flow",
-                  "name": "Duelist's Flow",
-                  "summary": [
-                    "After 2 consecutive parries: +25% attack speed for 3 seconds"
-                  ],
-                  "proc": {
-                    "trigger": "on_parry",
-                    "chance": 100,
-                    "condition": {
-                      "consecutive_parries_gte": 2
-                    },
-                    "effect": {
-                      "type": "gain_attack_speed_pct",
-                      "value": 25,
-                      "durationTicks": 3
-                    }
-                  }
-                }
-              ]
-            },
-            {
-              "tier": 3,
-              "title": "Predator",
-              "choices": [
-                {
-                  "id": "duelist_relentless",
-                  "name": "Relentless",
-                  "summary": [
-                    "On crit: queue a bonus auto-attack at 50% damage"
-                  ],
-                  "proc": {
-                    "trigger": "on_crit",
-                    "chance": 100,
-                    "condition": null,
-                    "effect": {
-                      "type": "counter_hit",
-                      "damageMult": 0.5
-                    }
-                  }
-                },
-                {
-                  "id": "duelist_en_garde",
-                  "name": "En Garde",
-                  "summary": [
-                    "For 3 seconds: parry chance is 100% and each parry grants 2 Blade Stacks instead of 1.",
-                    "Cooldown: 16 seconds."
-                  ],
-                  "effects": [
-                    {
-                      "type": "unlock_skill",
-                      "skillId": "en_garde"
-                    }
-                  ]
-                },
-                {
-                  "id": "duelist_perfect_rhythm",
-                  "name": "Perfect Rhythm",
-                  "summary": [
-                    "On a second parry in the same second: free counter hit at 100% damage"
-                  ],
-                  "proc": {
-                    "trigger": "on_parry",
-                    "chance": 100,
-                    "condition": {
-                      "already_parried_this_tick": true
-                    },
-                    "effect": {
-                      "type": "counter_hit",
-                      "damageMult": 1.0
-                    }
-                  }
-                }
-              ]
-            },
-            {
-              "tier": 4,
-              "title": "Capstone",
-              "choices": [
-                {
-                  "id": "duelist_flow_state",
-                  "name": "Flow State",
-                  "summary": [
-                    "After 5 consecutive crits: enter Flow State — all hits crit for 4 seconds. On expire: splash hit for 150% damage."
-                  ],
-                  "proc": {
-                    "trigger": "on_crit",
-                    "chance": 100,
-                    "condition": {
-                      "consecutive_crits_gte": 5
-                    },
-                    "effect": {
-                      "type": "enter_flow_state",
-                      "ticks": 4
-                    }
-                  }
-                }
-              ]
-            }
-          ]
-        },
-        {
           "id": "warmonger",
           "name": "Warmonger Survivor",
           "pointType": "talent",
@@ -860,13 +657,430 @@
               ]
             }
           ]
+        }
+      ]
+    },
+    {
+      "id": "rogue",
+      "name": "Rogue",
+      "classId": "rogue",
+      "icon": "dagger",
+      "description": "A patient predator who builds Energy through combat and applies Shadow Marks. Set up precise combos across the Shadow, Duelist, and Crimson trees.",
+      "rules": {
+        "tierLocks": true,
+        "minPreviousTierUnlocks": 2,
+        "minBranchPointsBeforeBranching": 2,
+        "maxActiveBranches": 2
+      },
+      "branches": [
+        {
+          "id": "shadow",
+          "name": "Shadow",
+          "pointType": "talent",
+          "theme": "energy",
+          "description": "Build Energy to fuel Marks and Detonate. Unlock dual wield and poison pressure. The foundation of every Rogue combo.",
+          "tiers": [
+            {
+              "tier": 1,
+              "title": "Foundation",
+              "choices": [
+                {
+                  "id": "shadow_two_blade",
+                  "name": "Two-Blade Form",
+                  "summary": [
+                    "Enables dual wielding. Equip a one-handed weapon in the offhand slot.",
+                    "Offhand weapon deals 50% damage on its own attack bar."
+                  ],
+                  "effects": [
+                    {
+                      "type": "dual_wield",
+                      "value": 1
+                    }
+                  ]
+                },
+                {
+                  "id": "shadow_opener",
+                  "name": "Ambush",
+                  "summary": [
+                    "40% chance to fire an autoattack before round 1 begins."
+                  ],
+                  "proc": {
+                    "trigger": "on_combat_start",
+                    "chance": 40,
+                    "condition": null,
+                    "effect": {
+                      "type": "opener_attack",
+                      "damageMult": 1
+                    }
+                  }
+                },
+                {
+                  "id": "shadow_mark_passive",
+                  "name": "Shadow Mark",
+                  "summary": [
+                    "Autoattacks have a 20% chance to apply a Shadow Mark to the target. Max 5 marks."
+                  ],
+                  "proc": {
+                    "trigger": "on_hit",
+                    "chance": 20,
+                    "condition": null,
+                    "effect": {
+                      "type": "apply_shadow_mark",
+                      "stacks": 1,
+                      "maxStacks": 5
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "tier": 2,
+              "title": "Precision",
+              "choices": [
+                {
+                  "id": "shadow_predators_eye",
+                  "name": "Predator's Eye",
+                  "summary": [
+                    "Unlock Predator's Eye: spend 25 Energy to guarantee your next hit or ability is a critical strike."
+                  ],
+                  "effects": [
+                    {
+                      "type": "unlock_skill",
+                      "skillId": "predators_eye"
+                    }
+                  ]
+                },
+                {
+                  "id": "shadow_expose",
+                  "name": "Expose",
+                  "summary": [
+                    "Unlock Expose: spend 20 Energy to reduce the target armor by 8 for the rest of the encounter."
+                  ],
+                  "effects": [
+                    {
+                      "type": "unlock_skill",
+                      "skillId": "expose"
+                    }
+                  ]
+                },
+                {
+                  "id": "shadow_venom_blade",
+                  "name": "Venomed Blade",
+                  "summary": [
+                    "While above 50 Energy, autoattacks have a 15% chance to apply Poison."
+                  ],
+                  "proc": {
+                    "trigger": "on_hit",
+                    "chance": 15,
+                    "condition": {
+                      "energy_gte": 50
+                    },
+                    "effect": {
+                      "type": "apply_poison",
+                      "duration": 4,
+                      "damagePct": 3
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "tier": 3,
+              "title": "Escalation",
+              "choices": [
+                {
+                  "id": "shadow_carved_deep",
+                  "name": "Carved Deep",
+                  "summary": [
+                    "If the target has any Shadow Marks, Bleed stacks deal +30% damage.",
+                    "Each Bleed tick has a 25% chance to apply one additional Mark."
+                  ],
+                  "effects": [
+                    {
+                      "type": "bleed_damage_pct_vs_marked",
+                      "value": 30
+                    },
+                    {
+                      "type": "bleed_tick_mark_chance",
+                      "value": 25
+                    }
+                  ]
+                },
+                {
+                  "id": "shadow_mark_mastery",
+                  "name": "Mark Mastery",
+                  "summary": [
+                    "Critical hits always apply a Shadow Mark.",
+                    "You carry 1 Shadow Mark into the start of your next combat."
+                  ],
+                  "proc": {
+                    "trigger": "on_crit",
+                    "chance": 100,
+                    "condition": null,
+                    "effect": {
+                      "type": "apply_shadow_mark",
+                      "stacks": 1,
+                      "maxStacks": 5
+                    }
+                  },
+                  "effects": [
+                    {
+                      "type": "carry_shadow_marks",
+                      "value": 1
+                    }
+                  ]
+                },
+                {
+                  "id": "shadow_deep_marks",
+                  "name": "Deep Marks",
+                  "summary": [
+                    "Each Shadow Mark deals 1% weapon damage per second as shadow damage.",
+                    "Detonate base damage is increased by 20% weapon damage per mark."
+                  ],
+                  "effects": [
+                    {
+                      "type": "shadow_mark_tick_damage_pct",
+                      "valuePerMark": 1
+                    },
+                    {
+                      "type": "detonate_base_pct_per_mark",
+                      "value": 20
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tier": 4,
+              "title": "Capstone",
+              "choices": [
+                {
+                  "id": "shadow_detonate",
+                  "name": "Detonate",
+                  "summary": [
+                    "Unlock Detonate: explode all Shadow Marks for damage per mark plus Energy-scaled bonus.",
+                    "30 Energy: base damage. 60+: +Vulnerable (+15% damage taken, 5s). 80+: +1s Stun and bonus multiplier."
+                  ],
+                  "effects": [
+                    {
+                      "type": "unlock_skill",
+                      "skillId": "detonate"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
         },
         {
-          "id": "momentum_bleeder",
-          "name": "Momentum Bleeder",
+          "id": "duelist",
+          "name": "Duelist",
+          "pointType": "talent",
+          "theme": "precision",
+          "description": "Parry to build Blade Stacks, release through crits. Patience charges your crit on misses. Chain parries and crits to enter Flow State.",
+          "tiers": [
+            {
+              "tier": 1,
+              "title": "Foundation",
+              "choices": [
+                {
+                  "id": "duelist_blade_stack",
+                  "name": "Blade Stack",
+                  "summary": [
+                    "+1 Blade Stack on each parry (max 5). Each stack = +6% crit chance"
+                  ],
+                  "proc": {
+                    "trigger": "on_parry",
+                    "chance": 100,
+                    "condition": null,
+                    "effect": {
+                      "type": "gain_blade_stack",
+                      "value": 1
+                    }
+                  }
+                },
+                {
+                  "id": "duelist_counter_stance",
+                  "name": "Counter Stance",
+                  "summary": [
+                    "On parry: your next hit deals +80% damage"
+                  ],
+                  "proc": {
+                    "trigger": "on_parry",
+                    "chance": 100,
+                    "condition": null,
+                    "effect": {
+                      "type": "gain_crit_chance_pct",
+                      "value": 40,
+                      "durationTicks": 1
+                    }
+                  }
+                },
+                {
+                  "id": "duelist_patience",
+                  "name": "Patience",
+                  "summary": [
+                    "On miss: +8% crit chance until next hit (stacks up to +40%)"
+                  ],
+                  "proc": {
+                    "trigger": "on_miss",
+                    "chance": 100,
+                    "condition": null,
+                    "effect": {
+                      "type": "gain_crit_chance_pct",
+                      "value": 8,
+                      "durationTicks": 999
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "tier": 2,
+              "title": "Mastery",
+              "choices": [
+                {
+                  "id": "duelist_steel_mirror",
+                  "name": "Steel Mirror",
+                  "summary": [
+                    "On parry: 25% chance to stun the enemy for 1 second"
+                  ],
+                  "proc": {
+                    "trigger": "on_parry",
+                    "chance": 25,
+                    "condition": null,
+                    "effect": {
+                      "type": "stun_enemy",
+                      "ticks": 1
+                    }
+                  }
+                },
+                {
+                  "id": "duelist_thousand_cuts",
+                  "name": "Thousand Cuts",
+                  "summary": [
+                    "On crit at 5 Blade Stacks: fire 4 rapid hits at 35% damage each, then clear all Blade Stacks"
+                  ],
+                  "proc": {
+                    "trigger": "on_crit",
+                    "chance": 100,
+                    "condition": {
+                      "blade_stacks_eq": 5
+                    },
+                    "effect": {
+                      "type": "thousand_cuts",
+                      "hits": 4,
+                      "damageMult": 0.35
+                    }
+                  }
+                },
+                {
+                  "id": "duelist_flow",
+                  "name": "Duelist's Flow",
+                  "summary": [
+                    "After 2 consecutive parries: +25% attack speed for 3 seconds"
+                  ],
+                  "proc": {
+                    "trigger": "on_parry",
+                    "chance": 100,
+                    "condition": {
+                      "consecutive_parries_gte": 2
+                    },
+                    "effect": {
+                      "type": "gain_attack_speed_pct",
+                      "value": 25,
+                      "durationTicks": 3
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "tier": 3,
+              "title": "Predator",
+              "choices": [
+                {
+                  "id": "duelist_relentless",
+                  "name": "Relentless",
+                  "summary": [
+                    "On crit: queue a bonus auto-attack at 50% damage"
+                  ],
+                  "proc": {
+                    "trigger": "on_crit",
+                    "chance": 100,
+                    "condition": null,
+                    "effect": {
+                      "type": "counter_hit",
+                      "damageMult": 0.5
+                    }
+                  }
+                },
+                {
+                  "id": "duelist_en_garde",
+                  "name": "En Garde",
+                  "summary": [
+                    "For 3 seconds: parry chance is 100% and each parry grants 2 Blade Stacks instead of 1.",
+                    "Cooldown: 16 seconds."
+                  ],
+                  "effects": [
+                    {
+                      "type": "unlock_skill",
+                      "skillId": "en_garde"
+                    }
+                  ]
+                },
+                {
+                  "id": "duelist_perfect_rhythm",
+                  "name": "Perfect Rhythm",
+                  "summary": [
+                    "On a second parry in the same second: free counter hit at 100% damage"
+                  ],
+                  "proc": {
+                    "trigger": "on_parry",
+                    "chance": 100,
+                    "condition": {
+                      "already_parried_this_tick": true
+                    },
+                    "effect": {
+                      "type": "counter_hit",
+                      "damageMult": 1
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "tier": 4,
+              "title": "Capstone",
+              "choices": [
+                {
+                  "id": "duelist_flow_state",
+                  "name": "Flow State",
+                  "summary": [
+                    "After 5 consecutive crits: enter Flow State — all hits crit for 4 seconds. On expire: splash hit for 150% damage."
+                  ],
+                  "proc": {
+                    "trigger": "on_crit",
+                    "chance": 100,
+                    "condition": {
+                      "consecutive_crits_gte": 5
+                    },
+                    "effect": {
+                      "type": "enter_flow_state",
+                      "ticks": 4
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "crimson",
+          "name": "Crimson",
           "pointType": "talent",
           "theme": "bleed",
-          "description": "Apply Bleed, let it pulse. Bleed damage pulses speed you up, speed means more hits, more hits stack more Bleed. At 4 stacks, auto-Hemorrhage. At 6, detonate.",
+          "description": "Apply Bleed, let it tick. Each Bleed tick speeds you up and feeds your Energy. At 4 stacks, auto-Hemorrhage. At 6, Exsanguinate.",
           "tiers": [
             {
               "tier": 1,
@@ -905,8 +1119,8 @@
                   }
                 },
                 {
-                  "id": "bleeder_bloodletter_heal",
-                  "name": "Bloodletter",
+                  "id": "crimson_taste_of_blood",
+                  "name": "Taste of Blood",
                   "summary": [
                     "Hitting a Bleeding enemy: restore 2% max HP"
                   ],
@@ -919,7 +1133,7 @@
                     "effect": {
                       "type": "heal_pct_max_hp",
                       "value": 2,
-                      "label": "Bloodletter"
+                      "label": "Taste of Blood"
                     }
                   }
                 }
@@ -933,7 +1147,7 @@
                   "id": "bleeder_bloodrush",
                   "name": "Bloodrush",
                   "summary": [
-                    "Each Bleed damage pulse: gain +4% attack speed per active Bleed stack during that second"
+                    "Each Bleed tick: gain +4% attack speed per active Bleed stack for 1 second"
                   ],
                   "proc": {
                     "trigger": "on_bleed_tick",
@@ -981,23 +1195,25 @@
             },
             {
               "tier": 3,
-              "title": "Blood Engine",
+              "title": "Arterial",
               "choices": [
                 {
-                  "id": "bleeder_blood_fury",
-                  "name": "Blood and Fury",
+                  "id": "crimson_flowing_wounds",
+                  "name": "Flowing Wounds",
                   "summary": [
-                    "Each Bleed damage pulse while Rage ≥ 30: gain +1 Rage (bridge into Berserker)"
+                    "Each Bleed tick generates +2 Energy. At 3+ stacks, generates +3 instead."
                   ],
                   "proc": {
                     "trigger": "on_bleed_tick",
                     "chance": 100,
-                    "condition": {
-                      "rage_above": 30
-                    },
+                    "condition": null,
                     "effect": {
-                      "type": "gain_rage",
-                      "value": 1
+                      "type": "gain_energy_per_bleed_tick",
+                      "value": 2,
+                      "bonusValue": 3,
+                      "bonusCondition": {
+                        "bleed_stacks_gte": 3
+                      }
                     }
                   }
                 },
@@ -1019,10 +1235,10 @@
                   }
                 },
                 {
-                  "id": "bleeder_relentless_wounds",
-                  "name": "Relentless Wounds",
+                  "id": "crimson_first_blood",
+                  "name": "First Blood",
                   "summary": [
-                    "Your first landed hit each fight applies 1 Bleed stack"
+                    "Your first hit each fight applies 2 Bleed stacks. If the opener fires, it also applies 1 Bleed stack."
                   ],
                   "proc": {
                     "trigger": "on_first_hit",
@@ -1030,9 +1246,15 @@
                     "condition": null,
                     "effect": {
                       "type": "apply_bleed",
+                      "stacks": 2
+                    }
+                  },
+                  "effects": [
+                    {
+                      "type": "opener_applies_bleed",
                       "stacks": 1
                     }
-                  }
+                  ]
                 }
               ]
             },
@@ -1041,10 +1263,11 @@
               "title": "Capstone",
               "choices": [
                 {
-                  "id": "bleeder_exsanguinate",
+                  "id": "crimson_exsanguinate",
                   "name": "Exsanguinate",
                   "summary": [
-                    "When Bleed deals damage at 6+ stacks: deal 30% of enemy max HP as true damage, stun for 2 seconds, clear all Bleed. Cannot retrigger while on cooldown."
+                    "When Bleed ticks at 6+ stacks: instantly deal all remaining stack damage at once, apply Vulnerable (+15% damage taken for 5s), and stun for 1s.",
+                    "Bleed stacks remain active. Once per combat."
                   ],
                   "proc": {
                     "trigger": "on_bleed_tick",
@@ -1055,8 +1278,13 @@
                     },
                     "effect": {
                       "type": "exsanguinate_burst",
-                      "hpPct": 30,
-                      "stunTicks": 2
+                      "instantBleedTicks": true,
+                      "vulnerable": {
+                        "damageTakenPct": 15,
+                        "durationTicks": 5
+                      },
+                      "stunTicks": 1,
+                      "clearBleed": false
                     }
                   }
                 }

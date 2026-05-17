@@ -21,6 +21,9 @@ const TESTING_DISABLE_WOUNDS = true;
 const HERO_RAGE_MAX = 100;
 const HERO_RAGE_DECAY_PER_IDLE_TICK = 3;
 const HERO_RAGE_INACTIVITY_GRACE_TICKS = 4;
+const HERO_ENERGY_MAX = 100;
+const HERO_ENERGY_PER_TICK = 5;
+const ENERGY_CLASSES = new Set(['rogue']);
 const PLAYER_BLEED_REFRESH_TICKS = 4;
 const SCAR_STACK_MAX = 15;
 const JUGGERNAUT_DAMAGE_TAKEN_REDUCTION_PCT = 50;
@@ -99,7 +102,17 @@ function rngForCombatant(combatant, sideRngs) {
   return combatant?.team === 'enemy' ? sideRngs.enemy : sideRngs.player;
 }
 
-function getHeroCombatResources(rage = 0) {
+function getHeroCombatResources(rage = 0, heroClass = null) {
+  if (ENERGY_CLASSES.has(heroClass)) {
+    return {
+      energy: {
+        key: 'energy',
+        label: 'Energy',
+        value: 0,
+        max: HERO_ENERGY_MAX,
+      },
+    };
+  }
   return {
     rage: {
       key: 'rage',
@@ -112,14 +125,24 @@ function getHeroCombatResources(rage = 0) {
 
 function syncHeroCombatResources(heroResources, procState) {
   if (!heroResources || !procState) return heroResources;
-  delete heroResources.energy;
-  heroResources.rage = {
-    ...(heroResources.rage || { key: 'rage', label: 'Rage', max: HERO_RAGE_MAX }),
-    key: 'rage',
-    label: 'Rage',
-    max: HERO_RAGE_MAX,
-    value: Math.max(0, Math.min(HERO_RAGE_MAX, Math.floor(procState.rage || 0))),
-  };
+  if ('energy' in heroResources) {
+    heroResources.energy = {
+      ...(heroResources.energy || { key: 'energy', label: 'Energy', max: HERO_ENERGY_MAX }),
+      key: 'energy',
+      label: 'Energy',
+      max: HERO_ENERGY_MAX,
+      value: Math.max(0, Math.min(HERO_ENERGY_MAX, Math.floor(procState.energy || 0))),
+    };
+  } else {
+    delete heroResources.energy;
+    heroResources.rage = {
+      ...(heroResources.rage || { key: 'rage', label: 'Rage', max: HERO_RAGE_MAX }),
+      key: 'rage',
+      label: 'Rage',
+      max: HERO_RAGE_MAX,
+      value: Math.max(0, Math.min(HERO_RAGE_MAX, Math.floor(procState.rage || 0))),
+    };
+  }
   return heroResources;
 }
 
@@ -1379,6 +1402,7 @@ export function initCombat({
   heroWeaponDamageDice = null, heroWeaponDamageMult = 1,
   heroWeaponFamily = null, heroWeaponTags = [], heroAttackType = null, heroOffhandFamily = null,
   heroInitialRage = 0,
+  heroClass = null,
   enemyFrontId = null,
   bossEnemyId = null, bossDeathEndsFight = true, addsDespawnOnBossDeath = true,
   heroProcNodes = [], heroProcOpts = {},
@@ -1442,10 +1466,11 @@ export function initCombat({
     log: [],
     heroConditions: { bleeding: null, poison: null },
     heroWounds: { deepCut: 0 },
-    heroResources: getHeroCombatResources(procState.rage),
+    heroResources: getHeroCombatResources(procState.rage, heroClass),
     ultimateChargePct: Math.max(0, Math.min(100, ultimateChargePct || 0)),
     heroProcNodes,
     procState,
+    heroClass: heroClass || null,
     fleeAttempted: false,
     debugPreventHeroDeath: !!debugPreventHeroDeath,
   };
@@ -1568,16 +1593,20 @@ export function processTick(state, playerAction = ACTION.NONE, rng = Math.random
   }
 
   applyScarStackArmor(hero, procState);
-  const rageIdleTicks = tick - (procState.lastRageActivityTick ?? 0);
-  const heroIsCasting = isCasting(queue, 'hero', tick);
-  const heroAutoProgressing = isAutoAttackBarProgressing(hero, tick);
-  const canDecayRage = effectivePlayerAction === ACTION.NONE
-    && procState.rage > 0
-    && !heroIsCasting
-    && !heroAutoProgressing
-    && rageIdleTicks > HERO_RAGE_INACTIVITY_GRACE_TICKS;
-  if (canDecayRage) {
-    procState.rage = Math.max(0, procState.rage - HERO_RAGE_DECAY_PER_IDLE_TICK);
+  if ('energy' in heroResources) {
+    procState.energy = Math.min(HERO_ENERGY_MAX, (procState.energy || 0) + HERO_ENERGY_PER_TICK);
+  } else {
+    const rageIdleTicks = tick - (procState.lastRageActivityTick ?? 0);
+    const heroIsCasting = isCasting(queue, 'hero', tick);
+    const heroAutoProgressing = isAutoAttackBarProgressing(hero, tick);
+    const canDecayRage = effectivePlayerAction === ACTION.NONE
+      && procState.rage > 0
+      && !heroIsCasting
+      && !heroAutoProgressing
+      && rageIdleTicks > HERO_RAGE_INACTIVITY_GRACE_TICKS;
+    if (canDecayRage) {
+      procState.rage = Math.max(0, procState.rage - HERO_RAGE_DECAY_PER_IDLE_TICK);
+    }
   }
   // Tick flow state duration
   if ((procState.flowStateTicks || 0) > 0) {
@@ -2236,7 +2265,12 @@ function tickActiveEffects(combatant, tick, log, procParams = null) {
     }
     if ((effect.type === 'bleed' || effect.type === 'hemorrhage') && effect.remainingTicks > 0) {
       const stacks = effect.type === 'bleed' ? Math.max(1, effect.stacks || 1) : 1;
-      const dmg = Math.max(1, Math.floor((combatant.maxHp || combatant.hp) * (effect.damagePctPerTick || 2) * stacks / 100));
+      const bleedVsMarkedBonusPct = (!combatant.isPlayer && effect.type === 'bleed' && procParams?.hero)
+        ? (procParams.hero.passiveEffects || []).reduce((sum, e) => e.type === 'bleed_damage_pct_vs_marked' ? sum + (e.value || 0) : sum, 0)
+        : 0;
+      const hasMarks = bleedVsMarkedBonusPct > 0 && (combatant.activeEffects || []).some(e => e.type === 'shadow_mark' && (e.stacks || 0) > 0);
+      const bleedVsMarkedMult = hasMarks ? (1 + bleedVsMarkedBonusPct / 100) : 1;
+      const dmg = Math.max(1, Math.floor((combatant.maxHp || combatant.hp) * (effect.damagePctPerTick || 2) * stacks / 100 * bleedVsMarkedMult));
       const hpBeforeDot = combatant.hp;
       combatant.hp = Math.max(0, combatant.hp - dmg);
       const label = effect.type === 'hemorrhage' ? 'Hemorrhage' : 'Bleeding';
@@ -2249,6 +2283,10 @@ function tickActiveEffects(combatant, tick, log, procParams = null) {
         const { procState, heroProcNodes, hero, rng } = procParams;
         procState.lastBleedDamage = dmg;
         fireProcTrigger('on_bleed_tick', { bleedDamage: dmg, bleedStacks: stacks }, procState, heroProcNodes, hero, combatant, tick, log, rng);
+        const markChancePct = (hero.passiveEffects || []).reduce((sum, e) => e.type === 'bleed_tick_mark_chance' ? sum + (e.value || 0) : sum, 0);
+        if (markChancePct > 0 && rng() * 100 < markChancePct && combatant.hp > 0) {
+          applyProcEffect({ type: 'apply_shadow_mark', stacks: 1, maxStacks: 5 }, { trigger: 'bleed_tick' }, procState, heroProcNodes, hero, combatant, tick, log, rng);
+        }
       }
       if (combatant.isPlayer && procParams?.procState) {
         const { procState, heroProcNodes, hero, enemy, rng } = procParams;
@@ -3486,7 +3524,8 @@ function prepareBasicAttack(combatant, defender, rng, opts = {}) {
   const activeForceCrit = (combatant.activeEffects || []).some(e => e.type === 'force_crit' && isEffectActive(e));
   const firstHitForceCrit = !!(opts.procState && !opts.procState.firstHitFired
     && (combatant.passiveEffects || []).some(e => e.type === 'first_hit_force_crit'));
-  const forceCrit = passiveForceCrit || activeForceCrit || firstHitForceCrit;
+  const forceCrit = passiveForceCrit || activeForceCrit || firstHitForceCrit || !!(combatant.isPlayer && opts.procState?.forcedNextCrit);
+  if (combatant.isPlayer && opts.procState?.forcedNextCrit) opts.procState.forcedNextCrit = false;
   const rawCritChance = (combatant.critChance || 0) + swordStanceCritBonus + berserkerCritBonus + hunterMarkCritBonus + passiveCritBonus + activeCritBonus;
   const critChance = getEffectiveCritChance(rawCritChance, defender);
   const critResist = getCritResistPct(defender);
@@ -4265,7 +4304,11 @@ function spendAbilityResources(heroResources, procState, ability, combatant = nu
   if (isBerserkerDeactivate) return;
   const rageCost = getAbilityEnergyCost(ability);
   if (rageCost > 0) {
-    procState.rage = Math.max(0, (procState.rage || 0) - rageCost);
+    if ('energy' in heroResources) {
+      procState.energy = Math.max(0, (procState.energy || 0) - rageCost);
+    } else {
+      procState.rage = Math.max(0, (procState.rage || 0) - rageCost);
+    }
     syncHeroCombatResources(heroResources, procState);
   }
   if (heroResources.mana && ability.manaCost) {
@@ -4822,6 +4865,7 @@ export function createInitialProcState(initialHp = 100, opts = {}) {
   const carriedMomentum = Math.max(0, Math.min(10, Math.floor(opts.momentumCarry || 0)));
   return {
     rage: Math.max(0, Math.min(HERO_RAGE_MAX, Math.floor(opts.initialRage || 0))),
+    energy: 0,
     bladeStacks: 0,
     scarStacks: 0,
     grudge: 0,
@@ -4848,6 +4892,7 @@ export function createInitialProcState(initialHp = 100, opts = {}) {
     guaranteedNextHit: opts.activeRelics
       ? (opts.activeRelics.some(r => r?.relicPassive?.type === 'first_hit_guaranteed'))
       : false,
+    forcedNextCrit: false,
     lastBleedDamage: 0,
     lastHeroFlankingHitTick: null,
     lastAllyFlankingHitTick: null,
@@ -4886,6 +4931,7 @@ function checkProcCondition(condition, ctx, procState, hero, enemy) {
   if (condition.target_had_bleed && !ctx.targetHadBleed) return false;
   if (condition.carried_rage_gt != null && (procState.carriedRage || 0) <= condition.carried_rage_gt) return false;
   if (condition.already_parried_this_tick && procState.parryCountThisTick <= 1) return false;
+  if (condition.energy_gte != null && (procState.energy || 0) < condition.energy_gte) return false;
   return true;
 }
 
@@ -5114,12 +5160,29 @@ function applyProcEffect(effect, ctx, procState, heroProcNodes, hero, enemy, tic
       break;
     case 'exsanguinate_burst': {
       if (!enemy || enemy.hp <= 0) break;
-      const dmg = Math.max(1, Math.floor((enemy.maxHp || enemy.hp) * (effect.hpPct || 30) / 100));
-      enemy.hp = Math.max(0, enemy.hp - dmg);
-      applyStunToCombatant(enemy, tick, getEffectDurationTicks(effect, 2));
       const bleedEff = (enemy.activeEffects || []).find(e => e.type === 'bleed');
-      if (bleedEff) bleedEff.remainingTicks = 0;
-      log.push(makeEntry(tick, 'hero', 'hit', `Exsanguinate! ${dmg} true damage — ${enemy.name} stunned!`, dmg, hero.hp, enemy.hp, {}));
+      const stacks = Math.max(1, bleedEff?.stacks || 1);
+      const damagePctPerTick = bleedEff?.damagePctPerTick || 2;
+      const remainingTicks = bleedEff?.remainingTicks || 1;
+      const dmgPerTick = Math.max(1, Math.floor((enemy.maxHp || enemy.hp) * damagePctPerTick * stacks / 100));
+      const dmg = Math.max(1, dmgPerTick * remainingTicks);
+      enemy.hp = Math.max(0, enemy.hp - dmg);
+      applyStunToCombatant(enemy, tick, effect.stunTicks || 1);
+      if (effect.vulnerable) {
+        const vuln = effect.vulnerable;
+        enemy.activeEffects = (enemy.activeEffects || [])
+          .filter(e => !(e.type === DAMAGE_TAKEN_BONUS_EFFECT && e.source === 'exsanguinate'));
+        enemy.activeEffects.push({
+          type: DAMAGE_TAKEN_BONUS_EFFECT,
+          value: vuln.damageTakenPct || 15,
+          remainingTicks: vuln.durationTicks || 5,
+          source: 'exsanguinate',
+        });
+      }
+      // clearBleed: false — bleed stacks remain active and keep ticking
+      log.push(makeEntry(tick, 'hero', 'hit',
+        `Exsanguinate! ${dmg} burst damage (${remainingTicks} tick${remainingTicks !== 1 ? 's' : ''} × ${stacks} stack${stacks !== 1 ? 's' : ''}) — Vulnerable & stunned!`,
+        dmg, hero.hp, enemy.hp, {}));
       break;
     }
     case 'enter_flow_state':
@@ -5139,6 +5202,69 @@ function applyProcEffect(effect, ctx, procState, heroProcNodes, hero, enemy, tic
       });
       log.push(makeEntry(tick, 'hero', 'proc', `Last Breath: ${procState.deathCheatTicks} seconds of immunity!`, 0, hero.hp, enemy?.hp, {}));
       break;
+    case 'opener_attack': {
+      if (!enemy || enemy.hp <= 0) break;
+      const rawDmg = Math.max(1, Math.floor((hero.damage || 0) * (effect.damageMult || 1)));
+      const dmg = applyArmor(rawDmg, getEffectiveArmor(enemy), 0);
+      enemy.hp = Math.max(0, enemy.hp - dmg);
+      log.push(makeEntry(tick, 'hero', 'hit', `Shadow Opener: ${dmg} damage.`, dmg, hero.hp, enemy.hp, {
+        targetId: enemy.id,
+        extraHit: true,
+        extraHitSource: 'opener_attack',
+      }));
+      const openerBleedStacks = (hero.passiveEffects || []).reduce((sum, e) => e.type === 'opener_applies_bleed' ? sum + (e.stacks || 1) : sum, 0);
+      if (openerBleedStacks > 0 && !isBleedImmune(enemy)) {
+        for (let s = 0; s < openerBleedStacks; s++) applyEnemyBleed(enemy, tick, log, hero, procState);
+      }
+      break;
+    }
+    case 'apply_shadow_mark': {
+      if (!enemy || enemy.hp <= 0) break;
+      const maxStacks = effect.maxStacks || 5;
+      const addStacks = effect.stacks || 1;
+      const existing = (enemy.activeEffects || []).find(e => e.type === 'shadow_mark');
+      if (existing) {
+        existing.stacks = Math.min(maxStacks, (existing.stacks || 0) + addStacks);
+      } else {
+        enemy.activeEffects = (enemy.activeEffects || []);
+        enemy.activeEffects.push({ type: 'shadow_mark', stacks: Math.min(maxStacks, addStacks) });
+      }
+      const markEff = (enemy.activeEffects || []).find(e => e.type === 'shadow_mark');
+      const stacks = markEff?.stacks || 1;
+      log.push(makeEntry(tick, 'hero', 'proc', `Shadow Mark: ${enemy.name} marked (${stacks}/${maxStacks}).`, 0, hero.hp, enemy.hp, {
+        targetId: enemy.id,
+      }));
+      break;
+    }
+    case 'gain_energy_per_bleed_tick': {
+      const bleedStacks = ctx.bleedStacks || 0;
+      let gain = effect.value || 0;
+      if (effect.bonusCondition?.bleed_stacks_gte != null && bleedStacks >= effect.bonusCondition.bleed_stacks_gte) {
+        gain += effect.bonusValue || 0;
+      }
+      if (gain > 0) {
+        procState.energy = Math.min(HERO_ENERGY_MAX, (procState.energy || 0) + gain);
+        log.push(makeEntry(tick, 'hero', 'proc', `Energy: +${gain} from bleed tick.`, 0, hero.hp, enemy?.hp, {}));
+      }
+      break;
+    }
+    case 'apply_poison': {
+      if (!enemy || enemy.hp <= 0 || isPoisonImmune(enemy)) break;
+      const durationTicks = effect.duration || 4;
+      const damagePctPerTick = effect.damagePct || 1;
+      const existingPoison = (enemy.activeEffects || []).find(e => e.type === 'poison');
+      if (existingPoison) {
+        existingPoison.remainingTicks = Math.max(existingPoison.remainingTicks || 0, durationTicks);
+        existingPoison.damagePctPerTick = Math.max(existingPoison.damagePctPerTick || 1, damagePctPerTick);
+      } else {
+        enemy.activeEffects = (enemy.activeEffects || []);
+        enemy.activeEffects.push({ type: 'poison', remainingTicks: durationTicks, stacks: 1, damagePctPerTick });
+      }
+      log.push(makeEntry(tick, 'hero', 'proc', `${enemy.name} is poisoned!`, 0, hero.hp, enemy.hp, {
+        targetId: enemy.id,
+      }));
+      break;
+    }
     case 'multi':
       for (const sub of (effect.effects || [])) {
         applyProcEffect(sub, ctx, procState, heroProcNodes, hero, enemy, tick, log, rng);

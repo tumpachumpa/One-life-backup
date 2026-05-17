@@ -391,12 +391,16 @@ export function getAbilityUseFailureReason(combatant, abilityOrId, tick, heroRes
     return `${ability.name} requires ${ability.requiredTrigger}.`;
   }
   if (combatant.isPlayer) {
-    const rageCost = getAbilityEnergyCost(ability);
-    const rage = heroResources?.rage;
-    const currentRage = Math.max(0, rage?.value || 0);
+    const cost = getAbilityEnergyCost(ability);
     const isBerserkerDeactivate = ability.type === "berserker_stance" && hasActiveBerserkerStance(combatant);
-    if (!isBerserkerDeactivate && rageCost > 0 && currentRage < rageCost) {
-      return `Not enough Rage (${Math.floor(currentRage)}/${rageCost}).`;
+    if (!isBerserkerDeactivate && cost > 0) {
+      if (heroResources?.energy) {
+        const currentEnergy = Math.max(0, heroResources.energy.value || 0);
+        if (currentEnergy < cost) return `Not enough Energy (${Math.floor(currentEnergy)}/${cost}).`;
+      } else {
+        const currentRage = Math.max(0, heroResources?.rage?.value || 0);
+        if (currentRage < cost) return `Not enough Rage (${Math.floor(currentRage)}/${cost}).`;
+      }
     }
   }
   return null;

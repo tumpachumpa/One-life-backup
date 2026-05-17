@@ -10,22 +10,22 @@ const CHARACTER_FRAME_INFERENCE = {
 const CHARACTER_VISUALS = {
   fighter: {
     idle: {
-      sprite: HERO_FALLBACK_SPRITE,
-      scale: 0.96,
+      sprite: "/assets/characters/fighter/Fighter.png",
+      scale: 1.0,
     },
     portrait: {
-      sprite: HERO_FALLBACK_SPRITE,
-      scale: 0.96,
+      sprite: "/assets/characters/fighter/Fighter.png",
+      scale: 1.0,
     },
     attacks: [
       {
-        sprite: HERO_FALLBACK_SPRITE,
-        scale: 0.96,
+        sprite: "/assets/characters/fighter/Fighter.png",
+        scale: 1.0,
       },
     ],
     run: {
-      sprite: HERO_FALLBACK_SPRITE,
-      scale: 0.96,
+      sprite: "/assets/characters/fighter/Fighter.png",
+      scale: 1.0,
     },
   },
   monk: {
@@ -59,22 +59,57 @@ const CHARACTER_VISUALS = {
   },
   archer: {
     idle: {
-      sprite: "/assets/sprites/Hero_archer.png",
       scale: 0.96,
+      animation: {
+        src: "/assets/characters/archer/Archer_Idle.png",
+        fps: 6,
+        loop: true,
+        inference: CHARACTER_FRAME_INFERENCE,
+      },
     },
     portrait: {
-      sprite: "/assets/sprites/Hero_archer.png",
+      sprite: "/assets/characters/archer/Archer.png",
       scale: 0.96,
     },
     attacks: [
       {
-        sprite: "/assets/sprites/Hero_archer.png",
         scale: 0.96,
+        animation: {
+          src: "/assets/characters/archer/Archer_Shoot.png",
+          fps: 10,
+          loop: false,
+          inference: CHARACTER_FRAME_INFERENCE,
+        },
       },
     ],
     run: {
-      sprite: "/assets/sprites/Hero_archer.png",
       scale: 0.96,
+      animation: {
+        src: "/assets/characters/archer/Archer_Run.png",
+        fps: 8,
+        loop: true,
+        inference: CHARACTER_FRAME_INFERENCE,
+      },
+    },
+  },
+  rogue: {
+    idle: {
+      sprite: "/assets/characters/Rogue/Rogue.png",
+      scale: 1.0,
+    },
+    portrait: {
+      sprite: "/assets/characters/Rogue/Rogue.png",
+      scale: 1.0,
+    },
+    attacks: [
+      {
+        sprite: "/assets/characters/Rogue/Rogue.png",
+        scale: 1.0,
+      },
+    ],
+    run: {
+      sprite: "/assets/characters/Rogue/Rogue.png",
+      scale: 1.0,
     },
   },
   lancer: {

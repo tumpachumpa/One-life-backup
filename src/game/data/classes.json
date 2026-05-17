@@ -842,7 +842,7 @@
       "id": "fighter",
       "name": "Fighter",
       "description": "A powerful warrior who excels at dealing heavy blows and holding the line.",
-      "sprite": "/assets/sprites/Hero_real.png",
+      "sprite": "/assets/characters/fighter/Fighter.png",
       "baseStats": {
         "str": 11,
         "dex": 7,
@@ -943,7 +943,7 @@
       "playable": true,
       "startingWeapon": "bow",
       "pet": "wolf_companion",
-      "sprite": "/assets/sprites/Hero_archer.png",
+      "sprite": "/assets/characters/archer/Archer.png",
       "baseStats": {
         "str": 6,
         "dex": 10,
@@ -997,6 +997,81 @@
           "type": "stun",
           "stunTicks": 1,
           "damageMult": 1.05
+        }
+      ]
+    },
+    {
+      "id": "rogue",
+      "name": "Rogue",
+      "description": "A patient predator who builds Energy through combat, applies Shadow Marks, and detonates them for devastating combos. Excels at burst damage and dual wielding.",
+      "playable": true,
+      "sprite": "/assets/characters/Rogue/Rogue.png",
+      "startingWeapon": "dagger",
+      "baseStats": {
+        "str": 7,
+        "dex": 11,
+        "int": 5,
+        "maxHp": 90,
+        "critChance": 5
+      },
+      "abilities": [
+        {
+          "id": "shadowstrike",
+          "name": "Shadowstrike",
+          "description": "A precise strike for 130% weapon damage with +15% critical chance.",
+          "energyCost": 20,
+          "castTicks": 1,
+          "cooldownSeconds": 7,
+          "type": "empowered_attack",
+          "requiresWeaponTags": ["melee"],
+          "forbiddenWeaponTags": ["ranged"],
+          "requirementLabel": "melee weapon",
+          "damageMult": 1.3,
+          "critChance": 15
+        },
+        {
+          "id": "expose",
+          "name": "Expose",
+          "description": "Find a gap in the enemy's defense, reducing their armor by 8 for this encounter.",
+          "energyCost": 20,
+          "castTicks": 1,
+          "cooldownSeconds": 10,
+          "type": "armor_shatter",
+          "requiresWeaponTags": ["melee"],
+          "forbiddenWeaponTags": ["ranged"],
+          "requirementLabel": "melee weapon",
+          "dormant": true,
+          "damageMult": 0.8,
+          "armorReduction": 8
+        },
+        {
+          "id": "predators_eye",
+          "name": "Predator's Eye",
+          "description": "Instant. Your next hit or ability is guaranteed to be a critical strike.",
+          "energyCost": 25,
+          "castTicks": 0,
+          "cooldownSeconds": 12,
+          "type": "force_next_crit",
+          "requiresWeaponTags": ["melee"],
+          "forbiddenWeaponTags": ["ranged"],
+          "requirementLabel": "melee weapon",
+          "dormant": true
+        },
+        {
+          "id": "detonate",
+          "name": "Detonate",
+          "description": "Explode all Shadow Marks on the target. Deals damage per mark plus bonus damage scaled by Energy spent. At 60+ Energy: applies Vulnerable. At 80+: also Stuns for 1s.",
+          "energyCost": 30,
+          "castTicks": 0,
+          "cooldownSeconds": 16,
+          "type": "detonate_marks",
+          "requiresWeaponTags": ["melee"],
+          "forbiddenWeaponTags": ["ranged"],
+          "requirementLabel": "melee weapon",
+          "dormant": true,
+          "damagePerMark": 0.5,
+          "vulnerable": { "damageTakenPct": 15, "durationTicks": 5, "minEnergy": 60 },
+          "stun": { "ticks": 1, "minEnergy": 80 }
         }
       ]
     }

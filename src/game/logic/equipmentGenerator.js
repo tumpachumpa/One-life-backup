@@ -17,13 +17,14 @@ const ARMOR_CASTER_AFFIX_IDENTITIES = new Set(["spell_damage", "stat_bonus:int"]
 const SPECIAL_SCALING_AFFIX_RARITIES = new Set(["artifact", "unique"]);
 const SPECIAL_SCALING_AFFIX_TYPES = new Set(["armor_pct", "damage_bonus_pct"]);
 
-export const STARTER_LOADOUT_IDS = ["sword", "mace", "spear", "bow"];
+export const STARTER_LOADOUT_IDS = ["sword", "mace", "spear", "bow", "dagger"];
 
 const STARTER_WEAPON_SPECS = {
   sword: { baseId: "sword_1h", materialId: "rusty", name: "Crude Sword" },
   mace: { baseId: "mace_1h", materialId: "rusty", name: "Crude Mace" },
   spear: { baseId: "spear_2h", materialId: "rusty", name: "Crude Spear" },
   bow: { baseId: "bow", materialId: "worn", name: "Worn Bow" },
+  dagger: { baseId: "dagger", materialId: "rusty", name: "Crude Dagger" },
 };
 
 const STARTER_CHEST_SPEC = { baseId: "cloth_chest", materialId: "cloth", name: "Threadbare Tunic" };
