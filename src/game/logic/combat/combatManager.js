@@ -5139,6 +5139,11 @@ function applyProcEffect(effect, ctx, procState, heroProcNodes, hero, enemy, tic
       });
       log.push(makeEntry(tick, 'hero', 'proc', `Last Breath: ${procState.deathCheatTicks} seconds of immunity!`, 0, hero.hp, enemy?.hp, {}));
       break;
+    case 'multi':
+      for (const sub of (effect.effects || [])) {
+        applyProcEffect(sub, ctx, procState, heroProcNodes, hero, enemy, tick, log, rng);
+      }
+      break;
     default:
       break;
   }
