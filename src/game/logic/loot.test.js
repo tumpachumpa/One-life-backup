@@ -75,6 +75,51 @@ describe("adventure loot pools", () => {
     expect(specialDrops.every(drop => drop.generated || armoredBearAllowed.has(drop.baseId || drop.id))).toBe(true);
   });
 
+  it("rolls enchantment stones from the combat loot path", () => {
+    const enemy = { ...enemyById.orc_berserker, tier: 4 };
+    const drops = rollCombatLoot(enemy, () => 0, {
+      adventure: { id: "orc_war_camp" },
+      difficultyStars: 5,
+    });
+
+    expect(drops).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "stone_ember_rare", type: "enchantment_stone" }),
+    ]));
+  });
+
+  it("rolls boss relics and configured boss stones from combat loot", () => {
+    const drops = rollCombatLoot(bossById.orc_shaman, () => 0, {
+      adventure: { id: "orc_war_camp" },
+      difficultyStars: 4,
+    });
+
+    expect(drops).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "relic_shaman_mark", type: "relic" }),
+      expect.objectContaining({ id: "stone_ember_common", type: "enchantment_stone" }),
+    ]));
+  });
+
+  it("does not drop a relic the hero already owns", () => {
+    const drops = rollCombatLoot(bossById.orc_shaman, () => 0, {
+      adventure: { id: "orc_war_camp" },
+      difficultyStars: 4,
+      hero: { relicSlots: ["relic_shaman_mark"], inventory: [] },
+    });
+
+    expect(drops.some(drop => drop.id === "relic_shaman_mark")).toBe(false);
+  });
+
+  it("uses per-enemy relic tables for special encounters that keep generic base loot", () => {
+    const drops = rollCombatLoot(enemyById.stone_golem, () => 0, {
+      adventure: { id: "rootspire_floor_3" },
+      difficultyStars: 4,
+    });
+
+    expect(drops).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "relic_stone_core", type: "relic" }),
+    ]));
+  });
+
   it("gives Armored Bear generated armor, bear meat, or campfire at configured weights", () => {
     const table = LOOT_TABLES.armored_bear;
     const rollBearDrop = pickRoll => {
@@ -175,7 +220,7 @@ describe("adventure loot pools", () => {
     expect(enemyById.boar).toMatchObject({ lootTable: "forest_boar", manualLoot: true });
     expect(enemyById.warg).toMatchObject({ lootTable: "orc_warg", manualLoot: true });
 
-    const wargDrops = rollCombatLoot(enemyById.warg, () => 0.1, { adventure: { lootPool: ADVENTURE_LOOT_POOLS.orc_war_camp } });
+    const wargDrops = rollCombatLoot(enemyById.warg, () => 0.2, { adventure: { lootPool: ADVENTURE_LOOT_POOLS.orc_war_camp } });
     expect(wargDrops.map(drop => drop.id)).toContain("warg_meat");
   });
 

@@ -70,6 +70,13 @@
       ],
       "adventureId": "crypts_floor_2"
     },
+    "cave_spider_common": {
+      "name": "Cave Spider Common",
+      "entries": [
+        { "enemyId": "venom_giant_spider", "weight": 100 }
+      ],
+      "adventureId": "cave_undercroft"
+    },
     "ancient_forest_common": {
       "name": "Ancient Forest Common",
       "entries": [

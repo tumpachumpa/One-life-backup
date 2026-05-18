@@ -307,8 +307,78 @@ function getContextLootBonus(context = {}) {
   return Math.max(0, Math.floor(Number(context.lootBonus || 0) + Number(context.magicFind || 0)));
 }
 
+function getContextDifficulty(context = {}) {
+  return Math.max(0, Math.floor(Number(context.difficultyStars ?? context.difficulty ?? context.adventure?.difficultyStars ?? 0)));
+}
+
+function getContextStoneZoneId(context = {}) {
+  return context.stoneZoneId
+    || context.adventure?.id
+    || context.zone?.id
+    || context.zoneId
+    || context.adventure?.zoneId
+    || context.lootPoolId
+    || null;
+}
+
+function getItemBaseId(ref) {
+  if (!ref) return null;
+  if (typeof ref === "string") return ref;
+  return ref.itemId || ref.baseId || ref.id || null;
+}
+
+function collectContextRelicIds(context = {}) {
+  const ids = new Set(context.heroRelicIds || context.existingRelicIds || []);
+  for (const slot of context.hero?.relicSlots || []) {
+    const id = getItemBaseId(slot);
+    if (id) ids.add(id);
+  }
+  for (const placed of context.hero?.inventory || []) {
+    const ref = placed?.itemId ?? placed;
+    const id = getItemBaseId(ref);
+    if (id && items.find(item => item.id === id)?.type === "relic") ids.add(id);
+  }
+  for (const drop of context.pendingLoot || []) {
+    const id = getItemBaseId(drop);
+    if (id && items.find(item => item.id === id)?.type === "relic") ids.add(id);
+  }
+  return [...ids];
+}
+
+function hasSpecialDropConfig(table) {
+  return !!(table?.relicDrop || table?.stoneDrop);
+}
+
+function getSpecialDropLootTable(enemy, fallbackTable) {
+  if (hasSpecialDropConfig(fallbackTable)) return fallbackTable;
+  const enemyTable = LOOT_TABLES[enemy?.id];
+  return hasSpecialDropConfig(enemyTable) ? enemyTable : fallbackTable;
+}
+
+function appendCombatBonusDrops(drops, enemy, table, rng = Math.random, context = {}) {
+  const next = [...drops];
+  const difficulty = getContextDifficulty(context);
+  const zoneId = getContextStoneZoneId(context);
+  const relicIds = collectContextRelicIds(context);
+  const specialTable = getSpecialDropLootTable(enemy, table);
+
+  const relicDrop = rollRelicDrop(specialTable, difficulty, relicIds, rng);
+  if (relicDrop) next.push(relicDrop);
+
+  const stoneDrop = specialTable?.stoneDrop
+    ? rollBossStoneDrop(specialTable, difficulty, zoneId, rng)
+    : rollStoneDrop(enemy, difficulty, zoneId, rng);
+  if (stoneDrop) next.push(stoneDrop);
+
+  return next;
+}
+
+function getManualCombatLootTable(enemy) {
+  return LOOT_TABLES[enemy.lootTable] || (enemy.phases ? LOOT_TABLES.boss : LOOT_TABLES.forest_basic);
+}
+
 function rollManualCombatLoot(enemy, rng = Math.random, contextLootBonus = 0) {
-  const table = LOOT_TABLES[enemy.lootTable] || (enemy.phases ? LOOT_TABLES.boss : LOOT_TABLES.forest_basic);
+  const table = getManualCombatLootTable(enemy);
   const lootBonus = (enemy.lootBonus || 0) + contextLootBonus;
   if (Array.isArray(enemy.lootTags) && enemy.lootTags.length) {
     return rollLootTable({ rolls: enemy.lootRolls || 1, tags: enemy.lootTags, dropChance: enemy.lootChance ?? 1, rarityTable: enemy.lootRarityTable || (enemy.phases ? "boss" : enemy.isMiniBoss ? "miniboss" : "normal") }, rng, lootBonus, enemy.lootRarityTable || null);
@@ -323,14 +393,24 @@ export function rollCombatLoot(enemy, rng = Math.random, context = {}) {
   // Boss-type enemies always use their own manual tables regardless of adventure pool
   const isBossEnemy = enemy?.phases || enemy?.boss || enemy?.isMiniBoss
     || enemy?.threat === "boss" || enemy?.threat === "special";
-  if (isBossEnemy) return rollManualCombatLoot(enemy, rng, contextLootBonus);
+  if (isBossEnemy) {
+    const table = getManualCombatLootTable(enemy);
+    return appendCombatBonusDrops(rollManualCombatLoot(enemy, rng, contextLootBonus), enemy, table, rng, context);
+  }
   // Adventure pool takes priority over per-enemy manualLoot flag
   const adventurePool = resolveAdventureLootPool(context.adventure, context.zone);
   if (adventurePool) {
-    return rollAdventureLootPool(adventurePool, enemy, rng, (enemy.lootBonus || 0) + contextLootBonus, enemy.lootRarityTable || null);
+    return appendCombatBonusDrops(
+      rollAdventureLootPool(adventurePool, enemy, rng, (enemy.lootBonus || 0) + contextLootBonus, enemy.lootRarityTable || null),
+      enemy,
+      null,
+      rng,
+      context,
+    );
   }
-  if (shouldUseManualCombatLoot(enemy)) return rollManualCombatLoot(enemy, rng, contextLootBonus);
-  return rollManualCombatLoot(enemy, rng, contextLootBonus);
+  const table = getManualCombatLootTable(enemy);
+  if (shouldUseManualCombatLoot(enemy)) return appendCombatBonusDrops(rollManualCombatLoot(enemy, rng, contextLootBonus), enemy, table, rng, context);
+  return appendCombatBonusDrops(rollManualCombatLoot(enemy, rng, contextLootBonus), enemy, table, rng, context);
 }
 
 export function rollItemRarity(tableName = "normal", rng = Math.random) {

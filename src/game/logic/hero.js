@@ -83,6 +83,8 @@ export function getHeroRawDamageBase(stats = {}, weapon = null) {
   return (stats.str || 0) * strScale + (stats.dex || 0) * dexScale + (stats.damage || 0);
 }
 
+export const MAX_HERO_LEVEL = 30;
+
 export function xpToLevel(xp) {
   let lvl = 1;
   let needed = 100;
@@ -133,11 +135,15 @@ export function getLevelRewards(prevXp, nextXp) {
   const before = xpToLevel(prevXp);
   const after = xpToLevel(nextXp);
   const levelsGained = Math.max(0, after.lvl - before.lvl);
+  // Talent points stop at the level cap; stat/attribute points continue indefinitely.
+  const cappedBefore = Math.min(before.lvl, MAX_HERO_LEVEL);
+  const cappedAfter = Math.min(after.lvl, MAX_HERO_LEVEL);
+  const talentLevelsGained = Math.max(0, cappedAfter - cappedBefore);
   return {
     before,
     after,
     levelsGained,
-    talentPoints: levelsGained,
+    talentPoints: talentLevelsGained,
     statPoints: levelsGained,
   };
 }
@@ -158,7 +164,7 @@ function sameAttributeAllocations(a = {}, b = {}) {
 }
 
 function getLevelMaxHpBonus(hero = {}) {
-  return Math.max(0, xpToLevel(hero?.xp || 0).lvl - 1) * 5;
+  return Math.max(0, Math.min(xpToLevel(hero?.xp || 0).lvl, MAX_HERO_LEVEL) - 1) * 5;
 }
 
 function getBaseStatsBeforeAttributePoints(hero = {}) {

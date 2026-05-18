@@ -245,6 +245,50 @@
       "icon": "/assets/items/generated/vampire_ring.png"
     },
     {
+      "id": "venom_fang_dagger",
+      "name": "Venom Fang",
+      "description": "A crooked blade coated in venom that never quite dries.",
+      "rarity": "rare",
+      "size": [1, 2],
+      "type": "gear",
+      "slot": "weapon",
+      "family": "dagger",
+      "weaponType": "one_handed_dagger",
+      "hands": 1,
+      "attackSpeed": 1.45,
+      "baseStats": { "damage": 7 },
+      "effects": [
+        {
+          "name": "Venom Coat",
+          "type": "poison_on_hit",
+          "chance": 35,
+          "duration": 3,
+          "damagePct": 1.5
+        }
+      ],
+      "tags": ["dagger", "weapon", "melee", "fast", "one_handed", "poison"],
+      "price": 320,
+      "dropWeight": 0,
+      "rarityAffixPools": ["venom", "precision"],
+      "icon": "/assets/items/generated/dagger.png"
+    },
+    {
+      "id": "venom_ring",
+      "size": [1, 1],
+      "name": "Venom Ring",
+      "type": "gear",
+      "slot": "ring",
+      "family": "ring",
+      "effects": [
+        { "type": "poison_resist", "value": 8 }
+      ],
+      "tags": ["ring", "defense", "poison"],
+      "rarityAffixPools": ["venom", "survival"],
+      "price": 180,
+      "dropWeight": 0,
+      "icon": "/assets/items/generated/ring_of_thorns.png"
+    },
+    {
       "id": "gust_ring",
       "size": [
         1,
@@ -655,6 +699,21 @@
       ],
       "price": 34,
       "dropWeight": 10,
+      "stackable": true,
+      "icon": "/assets/items/generated/wolf_meat.png"
+    },
+    {
+      "id": "spider_meat",
+      "name": "Raw Spider Meat",
+      "size": [1, 1],
+      "type": "consumable",
+      "family": "raw_meat",
+      "effects": [
+        { "type": "restore_hunger", "value": 8 }
+      ],
+      "tags": ["food", "raw", "meat", "raw_meat", "spider_meat", "consumable_raw"],
+      "price": 12,
+      "dropWeight": 0,
       "stackable": true,
       "icon": "/assets/items/generated/wolf_meat.png"
     },
@@ -1219,6 +1278,18 @@
       "price": 45,
       "stackable": true,
       "icon": "/assets/items/generated/wood.png"
+    },
+    {
+      "id": "spider_web",
+      "name": "Spider Web",
+      "size": [1, 1],
+      "type": "resource",
+      "family": "raw_material",
+      "tags": ["resource", "spider_web", "crafting_material"],
+      "price": 6,
+      "dropWeight": 0,
+      "stackable": true,
+      "icon": "/assets/items/generated/plant_fiber.png"
     },
     {
       "id": "plant_fiber",

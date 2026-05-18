@@ -4,8 +4,8 @@
     {
       "id": "dungeon_gate",
       "name": "Ancient Forest",
-      "x": 50,
-      "y": 58,
+      "x": 20.5,
+      "y": 55,
       "campEnabled": true,
       "adventures": [
         "dungeon_depths"
@@ -14,8 +14,8 @@
     {
       "id": "crypts_region",
       "name": "Crypts",
-      "x": 42,
-      "y": 66,
+      "x": 13,
+      "y": 38,
       "campEnabled": true,
       "adventures": [
         "crypts"
@@ -24,8 +24,8 @@
     {
       "id": "orc_borderlands",
       "name": "Orc War Camp",
-      "x": 68,
-      "y": 38,
+      "x": 61,
+      "y": 53,
       "locked": true,
       "campEnabled": true,
       "adventures": [
@@ -35,8 +35,8 @@
     {
       "id": "rootspire_tower_region",
       "name": "Rootspire Tower",
-      "x": 34,
-      "y": 30,
+      "x": 79,
+      "y": 26,
       "locked": true,
       "campEnabled": true,
       "adventures": [
@@ -46,8 +46,8 @@
     {
       "id": "fallen_summit_region",
       "name": "Fallen Summit",
-      "x": 24,
-      "y": 18,
+      "x": 87,
+      "y": 11,
       "locked": true,
       "campEnabled": true,
       "adventures": [
@@ -57,8 +57,8 @@
     {
       "id": "fallen_knight_mechanics_lab_region",
       "name": "Fallen Knight Lab",
-      "x": 29,
-      "y": 18,
+      "x": 81,
+      "y": 32,
       "devOnly": true,
       "adventures": [
         "fallen_knight_mechanics_lab"
@@ -67,8 +67,8 @@
     {
       "id": "sunken_forge_region",
       "name": "The Sunken Forge",
-      "x": 14,
-      "y": 12,
+      "x": 93,
+      "y": 6,
       "locked": true,
       "requiredItemId": "umbral_key",
       "campEnabled": true,
@@ -77,10 +77,46 @@
       ]
     },
     {
+      "id": "cave_spider_nest_1",
+      "name": "Spider Nest",
+      "layer": "cave",
+      "x": 19,
+      "y": 42,
+      "singleEncounter": true,
+      "enemyId": "venom_giant_spider",
+      "lootPoolId": "cave_spider",
+      "charges": { "max": 4, "rechargeSeconds": 180, "campRequired": false },
+      "adventures": []
+    },
+    {
+      "id": "cave_spider_nest_2",
+      "name": "Flooded Web",
+      "layer": "cave",
+      "x": 44,
+      "y": 68,
+      "singleEncounter": true,
+      "enemyId": "venom_giant_spider",
+      "lootPoolId": "cave_spider",
+      "charges": { "max": 4, "rechargeSeconds": 180, "campRequired": false },
+      "adventures": []
+    },
+    {
+      "id": "cave_spider_nest_3",
+      "name": "Dark Passage",
+      "layer": "cave",
+      "x": 13,
+      "y": 47,
+      "singleEncounter": true,
+      "enemyId": "venom_giant_spider",
+      "lootPoolId": "cave_spider",
+      "charges": { "max": 4, "rechargeSeconds": 180, "campRequired": false },
+      "adventures": []
+    },
+    {
       "id": "wolf_glade",
       "name": "Wolf Glade",
-      "x": 61.3,
-      "y": 72,
+      "x": 22,
+      "y": 74,
       "singleEncounter": true,
       "enemyId": "wolf",
       "lootPoolId": "ancient_forest",
@@ -96,8 +132,8 @@
     {
       "id": "blood_rat_den",
       "name": "Blood Rat Den",
-      "x": 35.5,
-      "y": 72,
+      "x": 28,
+      "y": 78,
       "singleEncounter": true,
       "enemyId": "blood_rat",
       "lootPoolId": "ancient_forest",
@@ -113,8 +149,8 @@
     {
       "id": "boar_hollow",
       "name": "Boar Hollow",
-      "x": 51.6,
-      "y": 88,
+      "x": 35,
+      "y": 72,
       "singleEncounter": true,
       "enemyId": "boar",
       "lootPoolId": "ancient_forest",
@@ -130,8 +166,8 @@
     {
       "id": "crow_thicket",
       "name": "Crow Thicket",
-      "x": 67.7,
-      "y": 56,
+      "x": 39,
+      "y": 66,
       "singleEncounter": true,
       "enemyId": "crow_swarm",
       "lootPoolId": "ancient_forest",
@@ -147,8 +183,8 @@
     {
       "id": "bandit_trail",
       "name": "Bandit Trail",
-      "x": 71,
-      "y": 80,
+      "x": 46,
+      "y": 76,
       "singleEncounter": true,
       "enemyId": "forest_bandit",
       "lootPoolId": "ancient_forest",
@@ -164,7 +200,7 @@
     {
       "id": "deep_grove",
       "name": "Deep Grove",
-      "x": 77.4,
+      "x": 50,
       "y": 64,
       "staminaCost": 10,
       "adventures": [
@@ -194,8 +230,8 @@
     {
       "id": "thornhaven",
       "name": "Thornhaven",
-      "x": 35,
-      "y": 78,
+      "x": 8,
+      "y": 88,
       "cityNode": true,
       "footprint": [
         {
@@ -263,8 +299,8 @@
     {
       "id": "pine_forest",
       "name": "Pine Forest",
-      "x": 22,
-      "y": 47,
+      "x": 19,
+      "y": 71,
       "gatheringNode": true,
       "availableJobs": [
         "gather_wood"
@@ -287,7 +323,7 @@
     {
       "id": "berry_meadow",
       "name": "Berry Meadow",
-      "x": 60,
+      "x": 36,
       "y": 80,
       "gatheringNode": true,
       "availableJobs": [
@@ -311,8 +347,8 @@
     {
       "id": "herb_hollow",
       "name": "Herb Hollow",
-      "x": 46,
-      "y": 62,
+      "x": 43,
+      "y": 74,
       "gatheringNode": true,
       "availableJobs": [
         "gather_herbs"

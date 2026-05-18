@@ -448,7 +448,7 @@ describe("archer talent tree", () => {
     expect(canLearnTalent(canBranch, tree, "ranger_venom_tips")).toBe(true);
   });
 
-  it("limits Archer builds to two active specializations", () => {
+  it("locks entry into a third branch when any existing branch is uncommitted", () => {
     const tree = getArcherTree();
     let hero = { ...initHero("Tester", { heroClass: "archer" }), talentPoints: 10, talents: {} };
 
@@ -456,9 +456,23 @@ describe("archer talent tree", () => {
     hero = learnTalent(hero, tree, "beastmaster_guardian_bond");
     hero = learnTalent(hero, tree, "sharpshooter_eagle_eye");
 
+    // sharpshooter only has 1 point — not committed — so ranger is blocked
     expect(canLearnTalent(hero, tree, "ranger_venom_tips")).toBe(false);
     expect(canLearnTalent(hero, tree, "beastmaster_protective_instinct")).toBe(true);
     expect(canLearnTalent(hero, tree, "sharpshooter_armor_pierce")).toBe(true);
+  });
+
+  it("allows a third branch once all existing branches are committed", () => {
+    const tree = getArcherTree();
+    let hero = { ...initHero("Tester", { heroClass: "archer" }), talentPoints: 10, talents: {} };
+
+    hero = learnTalent(hero, tree, "beastmaster_rending_bite");
+    hero = learnTalent(hero, tree, "beastmaster_guardian_bond");
+    hero = learnTalent(hero, tree, "sharpshooter_eagle_eye");
+    hero = learnTalent(hero, tree, "sharpshooter_armor_pierce");
+
+    // both existing branches committed (2 pts each) → ranger now unlocked
+    expect(canLearnTalent(hero, tree, "ranger_venom_tips")).toBe(true);
   });
 
   it("refunds saved Archer talents that no longer meet branch and tier rules", () => {
@@ -479,7 +493,7 @@ describe("archer talent tree", () => {
     expect(normalized.talentPoints).toBe(2);
   });
 
-  it("refunds saved Archer talents beyond the two-specialization limit", () => {
+  it("keeps all three specializations when two existing branches are both committed", () => {
     const tree = getArcherTree();
     const hero = {
       ...initHero("Tester", { heroClass: "archer" }),
@@ -495,13 +509,15 @@ describe("archer talent tree", () => {
 
     const normalized = normalizeTalentSelections(hero, tree);
 
+    // beastmaster:2 + sharpshooter:2 both committed → ranger entry valid
     expect(normalized.talents).toEqual({
       beastmaster_rending_bite: 1,
       beastmaster_guardian_bond: 1,
       sharpshooter_eagle_eye: 1,
       sharpshooter_armor_pierce: 1,
+      ranger_venom_tips: 1,
     });
-    expect(normalized.talentPoints).toBe(1);
+    expect(normalized.talentPoints).toBe(0);
   });
 
   it("keeps saved Archer talents that satisfy two-point tier gates", () => {

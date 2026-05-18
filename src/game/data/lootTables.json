@@ -928,6 +928,18 @@
         "materials": ["ash", "ancient", "bone"]
       }
     },
+    "cave_spider": {
+      "rolls": 1,
+      "tags": [],
+      "dropChance": 0.65,
+      "includeItemIds": ["spider_meat", "spider_web", "venom_ring", "venom_fang_dagger"],
+      "itemWeights": {
+        "spider_meat": 50,
+        "spider_web": 45,
+        "venom_ring": 3,
+        "venom_fang_dagger": 2
+      }
+    },
     "fallen_knight_boss": {
       "rolls": 2,
       "tags": [],

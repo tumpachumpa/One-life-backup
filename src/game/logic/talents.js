@@ -55,10 +55,13 @@ export function getBranchingRequirement(tree, targetBranch, talents = {}) {
     .map(branch => ({ branch, learned: countBranchUnlocks(branch, talents) }))
     .filter(entry => entry.learned > 0);
   const targetEntry = branchCounts.find(entry => entry.branch.id === targetBranch.id);
+
+  // Already invested here — always accessible.
   if (!branchCounts.length || targetEntry?.learned > 0) {
     return { locked: false, required, learned: targetEntry?.learned || 0, sourceBranch: targetBranch, maxBranches };
   }
 
+  // Hard cap: already at max allowed branches.
   if (Number.isFinite(maxBranches) && branchCounts.length >= maxBranches) {
     return {
       locked: true,
@@ -70,18 +73,25 @@ export function getBranchingRequirement(tree, targetBranch, talents = {}) {
     };
   }
 
-  const committedBranch = branchCounts.find(entry => entry.learned >= required);
-  if (committedBranch) {
-    return { locked: false, required, learned: committedBranch.learned, sourceBranch: committedBranch.branch, maxBranches };
+  // To enter a new Nth branch every one of the existing (N-1) active branches must
+  // already be "committed" (have >= required points).  This gate means:
+  //   • 2nd branch: 1 of 1 active must be committed (same as before)
+  //   • 3rd branch: 2 of 2 active must be committed
+  //   • 4th branch: 3 of 3 active must be committed, etc.
+  const committedBranches = branchCounts.filter(entry => entry.learned >= required);
+  if (committedBranches.length >= branchCounts.length) {
+    const source = committedBranches[0];
+    return { locked: false, required, learned: source.learned, sourceBranch: source.branch, maxBranches };
   }
 
-  const source = branchCounts[0] || null;
+  // Find the first uncommitted active branch to explain the lock.
+  const uncommitted = branchCounts.find(entry => entry.learned < required);
   return {
     locked: true,
     reason: "branch_commitment",
     required,
-    learned: source?.learned || 0,
-    sourceBranch: source?.branch || null,
+    learned: uncommitted?.learned || 0,
+    sourceBranch: uncommitted?.branch || null,
     maxBranches,
   };
 }

@@ -456,6 +456,34 @@
       "lootTable": "forest_basic"
     },
     {
+      "id": "venom_giant_spider",
+      "name": "Venom Giant Spider",
+      "family": "spider",
+      "tags": ["beast"],
+      "tier": 3,
+      "threat": "dangerous",
+      "sprite": "/assets/sprites/encounters/Giant spider.png",
+      "baseStats": {
+        "maxHp": 180,
+        "attack": 12,
+        "armor": 3,
+        "attackSpeed": 1.4
+      },
+      "rewards": {
+        "xp": 55,
+        "gold": 20
+      },
+      "effects": [
+        {
+          "type": "poison_on_hit",
+          "chance": 30,
+          "duration": 3,
+          "damagePct": 1.5
+        }
+      ],
+      "lootTable": "cave_spider"
+    },
+    {
       "id": "armored_bear",
       "name": "Armored Bear",
       "family": "bear",
