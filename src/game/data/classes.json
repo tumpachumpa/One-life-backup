@@ -609,7 +609,8 @@
           "castTicks": 3,
           "cooldown": 8,
           "type": "multi_hit",
-          "hits": 4
+          "hits": 4,
+          "dormant": true
         },
         {
           "id": "ki_impact",
@@ -618,7 +619,8 @@
           "castTicks": 2,
           "cooldown": 7,
           "type": "stun",
-          "stunTicks": 1
+          "stunTicks": 1,
+          "dormant": true
         },
         {
           "id": "meditation",
@@ -630,6 +632,7 @@
           "target": "self",
           "healPct": 30,
           "durationTicks": 4,
+          "dormant": true,
           "visual": {
             "target": "self",
             "width": 150,
@@ -662,91 +665,7 @@
         "maxHp": 110,
         "critChance": 2
       },
-      "abilities": [
-        {
-          "id": "heavy_blow",
-          "name": "Heavy Blow",
-          "description": "Deal 150% normal damage. 10% chance to crit for an additional 1.5x.",
-          "castTicks": 2,
-          "cooldown": 7,
-          "type": "empowered_attack",
-          "damageMult": 1.5,
-          "critChance": 10
-        },
-        {
-          "id": "guard_stance",
-          "name": "Guard Stance",
-          "description": "Raise your guard, increasing Block Chance and Block Power regeneration for a few seconds.",
-          "castTicks": 1,
-          "cooldown": 10,
-          "type": "guard_stance",
-          "target": "self",
-          "blockChanceBonus": 35,
-          "blockPowerRegenBonus": 8,
-          "durationTicks": 4
-        },
-        {
-          "id": "charge",
-          "name": "Charge",
-          "description": "Rush at the enemy, stunning them for 1 second.",
-          "castTicks": 2,
-          "cooldown": 8,
-          "type": "stun",
-          "stunTicks": 1
-        },
-        {
-          "id": "brutal_followthrough",
-          "name": "Brutal Followthrough",
-          "description": "Only usable after landing a critical hit. Strike again for 130% damage.",
-          "castTicks": 1,
-          "cooldown": 5,
-          "requiredTrigger": "after_crit",
-          "consumeTrigger": true,
-          "type": "empowered_attack",
-          "damageMult": 1.3,
-          "critChance": 0
-        },
-        {
-          "id": "shield_bash",
-          "name": "Shield Bash",
-          "description": "Instant. Only usable after blocking a hit. Slam the target for 100% weapon damage and stun it for roughly 4 seconds.",
-          "castTicks": 0,
-          "cooldown": 6,
-          "requiredTrigger": "after_block",
-          "consumeTrigger": true,
-          "type": "stun",
-          "requiresOffhandFamily": "shield",
-          "stunTicks": 3,
-          "damageMult": 1.0
-        },
-        {
-          "id": "war_cry",
-          "name": "War Cry",
-          "description": "Harden your stance and raise your counter chance for longer.",
-          "castTicks": 1,
-          "cooldown": 9,
-          "type": "counter_buff",
-          "target": "self",
-          "counterBonus": 40,
-          "durationTicks": 5,
-          "visual": {
-          "target": "self",
-            "width": 300,
-            "height": 300,
-            "animation": {
-              "src": "/assets/spells/Buffs/enrage_animation.png",
-              "fps": 12,
-              "loop": true,
-              "durationMs": 5000,
-              "inference": {
-                "frameWidth": 96,
-                "frameHeight": 96,
-                "columns": 1
-              }
-            }
-          }
-        }
-      ]
+      "abilities": []
     },
     {
       "id": "archer",
@@ -771,7 +690,8 @@
           "cooldown": 5,
           "type": "empowered_attack",
           "damageMult": 1.15,
-          "critChance": 8
+          "critChance": 8,
+          "dormant": true
         },
         {
           "id": "focused_shot",
@@ -781,7 +701,8 @@
           "cooldown": 7,
           "type": "empowered_attack",
           "damageMult": 1.5,
-          "critChance": 15
+          "critChance": 15,
+          "dormant": true
         }
       ]
     },
@@ -798,7 +719,8 @@
           "cooldown": 5,
           "type": "empowered_attack",
           "damageMult": 1.35,
-          "critChance": 5
+          "critChance": 5,
+          "dormant": true
         },
         {
           "id": "pinning_charge",
@@ -808,7 +730,8 @@
           "cooldown": 8,
           "type": "stun",
           "stunTicks": 1,
-          "damageMult": 1.05
+          "damageMult": 1.05,
+          "dormant": true
         }
       ]
     },
@@ -839,7 +762,8 @@
           "forbiddenWeaponTags": ["ranged"],
           "requirementLabel": "melee weapon",
           "damageMult": 1.3,
-          "critChance": 15
+          "critChance": 15,
+          "dormant": true
         },
         {
           "id": "expose",

@@ -78,7 +78,10 @@ export const universalAbilities = (classesData.universalAbilities || []).map(nor
 export const universalUltimates = classesData.universalUltimates || [];
 export const heroClasses = classesData.classes.map(entry => ({
   ...entry,
-  abilities: [...(entry.abilities || []), ...universalAbilities].map(normalizeAbilityEnergyCost),
+  abilities: [
+    ...(entry.abilities || []),
+    ...universalAbilities.map(a => ({ ...a, universal: true })),
+  ].map(normalizeAbilityEnergyCost),
   ultimates: [...(entry.ultimates || []), ...universalUltimates],
 }));
 export const items = itemsData.items;
