@@ -2092,6 +2092,7 @@ export function processAutoAttackFrame(state, elapsedMs = 0, rng = Math.random, 
       const logEnemy = combatant.team === 'player' || combatant.id === 'hero' ? defender : combatant;
       const procForImpact = procForActor || (defender?.isPlayer ? procState : null);
       const attack = createBasicAttackImpact(combatant, defender, tick, actorRng, ACTION.BASIC_ATTACK, { frontId, enemyFrontId, procState: procForImpact });
+      if (combatant.isPlayer) attack.isMainHand = true;
       if (resolveBasicAttackImpact(attack, combatant, defender, tick, log, actorRng, hero, logEnemy, heroResources, heroConditions, heroWounds, procForImpact, heroProcNodes, { frontId, enemyFrontId, allies })) {
         queue = removePendingBasicAttacksForActor(queue, defender.id);
       }
@@ -2124,7 +2125,11 @@ export function processAutoAttackFrame(state, elapsedMs = 0, rng = Math.random, 
     for (let i = 0; i < offhandAttackCount; i++) {
       if (hero.hp <= 0 || enemy.hp <= 0) break;
       const attack = createBasicAttackImpact(hero, enemy, tick, playerRng, ACTION.BASIC_ATTACK, { frontId, enemyFrontId, procState });
-      attack.damage = Math.max(1, Math.floor(attack.damage * hero.offhandDamageMult));
+      const preReductionDamage = attack.damage;
+      attack.damage = Math.max(1, Math.floor(preReductionDamage * hero.offhandDamageMult));
+      attack.isOffhand = true;
+      attack.preReductionDamage = preReductionDamage;
+      attack.offhandDamageMult = hero.offhandDamageMult;
       resolveBasicAttackImpact(attack, hero, enemy, tick, log, playerRng, hero, enemy, heroResources, heroConditions, heroWounds, procState, heroProcNodes, { frontId, enemyFrontId, allies });
     }
   }
@@ -3753,12 +3758,13 @@ function resolveBasicAttackImpact(action, attacker, defender, tick, log, rng, he
   if (attackerIsHero && procState?.guaranteedNextHit) procState.guaranteedNextHit = false;
   consumeAttackBasedEffects(attacker);
   if (rng() * 100 >= hitChance) {
+    const missHandTag = action.isOffhand ? '[OH] ' : action.isMainHand ? '[MH] ' : '';
     const text = attackerIsHero
-      ? `You miss ${defender.name}.`
+      ? `${missHandTag}You miss ${defender.name}.`
       : defenderIsHero
         ? `${attacker.name} misses you.`
         : `${attacker.name} misses ${defender.name}.`;
-    log.push(makeEntry(tick, action.actorId, 'miss', text, 0, hero.hp, enemy.hp, targetMeta));
+    log.push(makeEntry(tick, action.actorId, 'miss', text, 0, hero.hp, enemy.hp, { ...targetMeta, isMainHand: !!action.isMainHand, isOffhand: !!action.isOffhand }));
     if (attackerIsHero && procState) {
       procState.consecutiveHits = 0;
       procState.consecutiveCrits = 0;
@@ -3867,22 +3873,26 @@ function resolveBasicAttackImpact(action, attacker, defender, tick, log, rng, he
   });
   if (!result.dodged) consumeIncomingDamageReductionAttack(defender);
   if (result.dodged) {
+    const dodgeHandTag = action.isOffhand ? '[OH] ' : action.isMainHand ? '[MH] ' : '';
     const text = attackerIsHero
-      ? `${defender.name} dodges your attack!`
+      ? `${dodgeHandTag}${defender.name} dodges your attack!`
       : defenderIsHero
         ? 'You dodge the attack!'
         : `${defender.name} dodges ${attacker.name}'s attack!`;
-    log.push(makeEntry(tick, action.actorId, 'dodged', text, 0, hero.hp, enemy.hp, targetMeta));
+    log.push(makeEntry(tick, action.actorId, 'dodged', text, 0, hero.hp, enemy.hp, { ...targetMeta, isMainHand: !!action.isMainHand, isOffhand: !!action.isOffhand }));
   } else if (result.blocked) {
     if (attackerIsHero) {
       const applied = applyCombatantDamage(enemy, result.damage);
       const critText = action.isCrit ? ' Critical hit!' : '';
       const blockSource = result.shieldUp ? 'Shield Up' : 'Block Power';
-      log.push(makeEntry(tick, 'hero', 'blocked', `${defender.name} blocks ${result.absorbed || 0} with ${blockSource}. You deal ${applied.damage}.${critText}`, applied.damage, hero.hp, enemy.hp, {
+      const blockHandTag = action.isOffhand ? '[OH] ' : action.isMainHand ? '[MH] ' : '';
+      log.push(makeEntry(tick, 'hero', 'blocked', `${blockHandTag}${defender.name} blocks ${result.absorbed || 0} with ${blockSource}. You deal ${applied.damage}.${critText}`, applied.damage, hero.hp, enemy.hp, {
         isCrit: !!action.isCrit,
         absorbed: result.absorbed || 0,
         shieldAbsorbed: applied.absorbed || 0,
         recovered: result.recovered || 0,
+        isMainHand: !!action.isMainHand,
+        isOffhand: !!action.isOffhand,
         ...targetMeta,
       }));
       logDamageShieldAbsorb(enemy, applied, tick, log, hero, enemy, targetMeta);
@@ -3990,9 +4000,15 @@ function resolveBasicAttackImpact(action, attacker, defender, tick, log, rng, he
         procState.grudge = 0;
       }
       const applied = applyCombatantDamage(enemy, result.damage);
-      log.push(makeEntry(tick, 'hero', 'hit', `You hit ${defender.name} for ${applied.damage}${action.isCrit ? ' (CRIT)' : ''}.`, applied.damage, hero.hp, enemy.hp, {
+      const hitHandTag = action.isOffhand ? '[OH] ' : action.isMainHand ? '[MH] ' : '';
+      const offhandReductionNote = action.isOffhand && action.preReductionDamage != null
+        ? ` (${action.preReductionDamage}→${Math.round((action.offhandDamageMult ?? 0.5) * 100)}%)`
+        : '';
+      log.push(makeEntry(tick, 'hero', 'hit', `${hitHandTag}You hit ${defender.name} for ${applied.damage}${action.isCrit ? ' (CRIT)' : ''}${offhandReductionNote}.`, applied.damage, hero.hp, enemy.hp, {
         isCrit: !!action.isCrit,
         shieldAbsorbed: applied.absorbed || 0,
+        isMainHand: !!action.isMainHand,
+        isOffhand: !!action.isOffhand,
         ...targetMeta,
       }));
       logDamageShieldAbsorb(enemy, applied, tick, log, hero, enemy, targetMeta);
