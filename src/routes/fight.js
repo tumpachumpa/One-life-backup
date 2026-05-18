@@ -1,19 +1,39 @@
 'use strict';
 const pool = require('../db/pool');
 const { createVerifier } = require('fast-jwt');
+const classesData = require('../game/data/classes.json');
+const talentsData = require('../game/data/talents.json');
 
 // ── constants ─────────────────────────────────────────────────────────────────
 const TICK_MS                = 1000;
 const AUTO_ATTACK_TICKS      = 3;
 const MAX_FIGHT_TICKS        = 600;
 const ABILITY_COOLDOWN_TICKS = 15;
-const ABILITY_AUTO_TICKS     = 20;   // auto-fire ability if player hasn't acted
+const ABILITY_AUTO_TICKS     = 20;
 const CONNECT_TIMEOUT_MS     = 25000;
 const LOOT_POOL_SIZE         = 5;
 const PROTECT_MINUTES        = 5;
 
+// ── ability map (built once at startup) ───────────────────────────────────────
+function buildAbilityMap() {
+  const map = new Map();
+  function register(ab) { if (ab?.id) map.set(ab.id, ab); }
+  for (const cls of (classesData.classes || [])) (cls.abilities || []).forEach(register);
+  (classesData.universalAbilities || []).forEach(register);
+  (classesData.universalUltimates || []).forEach(register);
+  function walkTalents(obj) {
+    if (!obj || typeof obj !== 'object') return;
+    if (Array.isArray(obj)) { obj.forEach(walkTalents); return; }
+    if (obj.id && obj.type && !map.has(obj.id)) { register(obj); return; }
+    for (const v of Object.values(obj)) walkTalents(v);
+  }
+  walkTalents(talentsData.trees || {});
+  return map;
+}
+const ABILITY_MAP = buildAbilityMap();
+
 // ── in-memory state ───────────────────────────────────────────────────────────
-const games = new Map();  // String(challengeId) → game object
+const games = new Map();
 
 // ── pure helpers ──────────────────────────────────────────────────────────────
 function mulberry32(seed) {
@@ -59,7 +79,6 @@ function collectAllItems(saveData) {
   return items;
 }
 
-// Matches client's equipmentGenerator.js exactly
 function getDiceAverage(dice) {
   if (!dice) return 0;
   const count = Math.max(1, Math.floor(Number(dice.count) || 1));
@@ -81,24 +100,29 @@ function makeCombatant(snap, side) {
   const s = snap || {};
   return {
     side,
-    hp:                s.maxHp         ?? 100,
-    maxHp:             s.maxHp         ?? 100,
-    damage:            s.damage        ?? 10,
-    armor:             s.armor         ?? 0,
-    attackSpeed:       s.attackSpeed   ?? 1,
-    critChance:        s.critChance    ?? 0,   // 0 is valid — don't treat as falsy
-    critMult:          s.critMult      ?? 1.5,
-    critResist:        s.critResist    ?? 0,
-    weaponDamageDice:  s.weaponDamageDice  || null,
-    weaponDamageMult:  s.weaponDamageMult  ?? 1,
-    autoProgress:      0,
-    abilities:         (s.equippedSkillIds || s.availableSkillIds || []).filter(Boolean),
-    lastAbilityTick:   -(ABILITY_AUTO_TICKS + 1),
+    hp:               s.maxHp         ?? 100,
+    maxHp:            s.maxHp         ?? 100,
+    damage:           s.damage        ?? 10,
+    armor:            s.armor         ?? 0,
+    attackSpeed:      s.attackSpeed   ?? 1,
+    critChance:       s.critChance    ?? 0,
+    critMult:         s.critMult      ?? 1.5,
+    critResist:       s.critResist    ?? 0,
+    weaponDamageDice: s.weaponDamageDice  || null,
+    weaponDamageMult: s.weaponDamageMult  ?? 1,
+    autoProgress:     0,
+    abilities:        (s.equippedSkillIds || s.availableSkillIds || []).filter(Boolean),
+    lastAbilityTick:  -(ABILITY_AUTO_TICKS + 1),
     pendingAbilityIdx: null,
+    // Phase 3 — combat state
+    activeEffects:    [],
+    armorReduction:   0,
+    stunUntilTick:    -1,
+    passiveEffects:   s.passiveEffects || [],
   };
 }
 
-// Matches client's combatManager damage formula
+// ── combat helpers ────────────────────────────────────────────────────────────
 function baseAttackDamage(attacker, rng) {
   const diceRoll    = attacker.weaponDamageDice ? rollDice(attacker.weaponDamageDice, rng) : null;
   const diceAverage = attacker.weaponDamageDice ? getDiceAverage(attacker.weaponDamageDice) : 0;
@@ -106,23 +130,317 @@ function baseAttackDamage(attacker, rng) {
   return Math.max(0, (attacker.damage ?? 0) + diceDelta);
 }
 
+function getEffectiveArmor(defender) {
+  return Math.max(0, (defender.armor ?? 0) - (defender.armorReduction ?? 0));
+}
+
+function applyArmor(rawDmg, armor, armorPenPct) {
+  const effectiveArmor = armor * (1 - (armorPenPct || 0) / 100);
+  return Math.max(1, Math.floor(rawDmg * (100 / (100 + effectiveArmor))));
+}
+
 function calcHit(attacker, defender, rng) {
-  const base          = baseAttackDamage(attacker, rng);
-  const effectiveCrit = Math.max(0, (attacker.critChance ?? 0) - (defender.critResist ?? 0));
-  const isCrit        = rng() * 100 < effectiveCrit;
-  const rawDmg        = base * (isCrit ? (attacker.critMult ?? 1.5) : 1);
-  const dmg           = Math.max(1, Math.floor(rawDmg * (100 / (100 + (defender.armor ?? 0)))));
+  const base = baseAttackDamage(attacker, rng);
+
+  // Consume force_next_crit if active
+  const fcIdx = (attacker.activeEffects || []).findIndex(e => e.type === 'force_next_crit');
+  const forcedCrit = fcIdx >= 0;
+  if (forcedCrit) attacker.activeEffects.splice(fcIdx, 1);
+
+  // Consume heavy_strikes charge
+  let bonusDamagePct = 0;
+  for (const effect of (attacker.activeEffects || [])) {
+    if (effect.type === 'heavy_strikes' && (effect.charges || 0) > 0) {
+      bonusDamagePct += effect.damageBonusPct || 20;
+      effect.charges--;
+      break;
+    }
+  }
+  attacker.activeEffects = (attacker.activeEffects || []).filter(e => e.type !== 'heavy_strikes' || (e.charges || 0) > 0);
+
+  // Berserker stance bonus
+  for (const effect of (attacker.activeEffects || [])) {
+    if (effect.type === 'berserker_stance') bonusDamagePct += effect.damageDealtPct || 0;
+  }
+
+  // Hunter mark bonus (auto-attack only)
+  let hunterMarkDamagePct = 0;
+  let hunterMarkCritBonus = 0;
+  for (const effect of (defender.activeEffects || [])) {
+    if (effect.type === 'hunter_mark') {
+      hunterMarkDamagePct += effect.autoDamageBonusPct || 0;
+      hunterMarkCritBonus += effect.autoCritBonusPct || 0;
+    }
+  }
+
+  const effectiveCrit = Math.max(0, (attacker.critChance ?? 0) + hunterMarkCritBonus - (defender.critResist ?? 0));
+  const isCrit = forcedCrit || rng() * 100 < effectiveCrit;
+  const totalMult = (1 + bonusDamagePct / 100) * (1 + hunterMarkDamagePct / 100) * (isCrit ? (attacker.critMult ?? 1.5) : 1);
+  const rawDmg = base * totalMult;
+  const dmg = applyArmor(rawDmg, getEffectiveArmor(defender), 0);
   return { dmg, isCrit };
 }
 
-function calcAbilityHit(attacker, defender, rng, abilityIdx) {
-  const base          = baseAttackDamage(attacker, rng);
-  const mult          = 1.5 + (abilityIdx || 0) * 0.3;
-  const effectiveCrit = Math.max(0, (attacker.critChance ?? 0) - (defender.critResist ?? 0));
-  const isCrit        = rng() * 100 < effectiveCrit;
-  const rawDmg        = base * mult * (isCrit ? (attacker.critMult ?? 1.5) : 1);
-  const dmg           = Math.max(1, Math.floor(rawDmg * (100 / (100 + (defender.armor ?? 0)))));
-  return { dmg, isCrit };
+// ── Phase 3: real ability resolution ─────────────────────────────────────────
+function resolveAbilityPvP(attacker, defender, abilityId, rng, tick) {
+  const ability = ABILITY_MAP.get(abilityId);
+  const sideEffects = [];
+
+  if (!ability) {
+    // Unknown ability: fallback 1.5× placeholder
+    const base = baseAttackDamage(attacker, rng);
+    const effectiveCrit = Math.max(0, (attacker.critChance ?? 0) - (defender.critResist ?? 0));
+    const isCrit = rng() * 100 < effectiveCrit;
+    const rawDmg = base * 1.5 * (isCrit ? (attacker.critMult ?? 1.5) : 1);
+    const dmg = applyArmor(rawDmg, getEffectiveArmor(defender), 0);
+    return { dmg, isCrit, sideEffects };
+  }
+
+  // ── Self-buff / no-damage abilities ──────────────────────────────────────
+  switch (ability.type) {
+    case 'force_next_crit':
+      attacker.activeEffects.push({ type: 'force_next_crit' });
+      sideEffects.push({ type: 'buff', effect: 'force_next_crit', target: 'self' });
+      return { dmg: 0, isCrit: false, sideEffects };
+
+    case 'heavy_strikes':
+      attacker.activeEffects.push({
+        type: 'heavy_strikes',
+        charges: ability.chargesGranted ?? 3,
+        damageBonusPct: ability.damageBonusPct ?? 20,
+      });
+      sideEffects.push({ type: 'buff', effect: 'heavy_strikes', charges: ability.chargesGranted ?? 3, target: 'self' });
+      return { dmg: 0, isCrit: false, sideEffects };
+
+    case 'berserker_stance': {
+      // Remove existing stance first (toggle)
+      const existing = attacker.activeEffects.findIndex(e => e.type === 'berserker_stance');
+      if (existing >= 0) { attacker.activeEffects.splice(existing, 1); }
+      else {
+        const dur = ability.durationTicks ?? Math.round((ability.durationSeconds ?? 8));
+        attacker.activeEffects.push({
+          type: 'berserker_stance',
+          damageDealtPct: ability.damageDealtPct ?? 30,
+          damageTakenPct: ability.damageTakenPct ?? 30,
+          remainingTicks: dur,
+        });
+      }
+      sideEffects.push({ type: 'buff', effect: 'berserker_stance', target: 'self' });
+      return { dmg: 0, isCrit: false, sideEffects };
+    }
+
+    case 'rapid_fire':
+      attacker.activeEffects.push({
+        type: 'rapid_fire',
+        charges: ability.chargesGranted ?? 3,
+        attackSpeedBonusPct: ability.attackSpeedBonusPct ?? 40,
+      });
+      sideEffects.push({ type: 'buff', effect: 'rapid_fire', target: 'self' });
+      return { dmg: 0, isCrit: false, sideEffects };
+
+    case 'heal_over_time':
+    case 'wild_renewal': {
+      const dur = ability.durationTicks ?? 4;
+      const healPerTick = Math.max(1, Math.ceil(attacker.maxHp * (ability.healPct ?? 15) / 100 / dur));
+      attacker.activeEffects.push({ type: 'heal_over_time', healPerTick, remainingTicks: dur });
+      sideEffects.push({ type: 'buff', effect: 'heal_over_time', healPerTick, ticks: dur, target: 'self' });
+      return { dmg: 0, isCrit: false, sideEffects };
+    }
+
+    case 'parry_guard':
+    case 'en_garde':
+    case 'shield_up':
+    case 'guard_instinct':
+    case 'iron_will':
+    case 'shadow_veil':
+    case 'battle_focus': {
+      const dur = ability.durationTicks ?? Math.max(1, Math.round((ability.durationSeconds ?? ability.cooldownSeconds ?? 6) * 0.5));
+      const reductionPct = ability.damageReductionPct ?? ability.reductionPct ?? 20;
+      attacker.activeEffects.push({ type: 'damage_reduction', reductionPct, remainingTicks: dur });
+      sideEffects.push({ type: 'buff', effect: ability.type, reductionPct, target: 'self' });
+      return { dmg: 0, isCrit: false, sideEffects };
+    }
+
+    case 'hunter_mark':
+      defender.activeEffects.push({
+        type: 'hunter_mark',
+        autoDamageBonusPct: ability.autoDamageBonusPct ?? 30,
+        autoCritBonusPct: ability.autoCritBonusPct ?? 10,
+        remainingTicks: ability.markTicks ?? 3,
+      });
+      sideEffects.push({ type: 'debuff', effect: 'hunter_mark', target: 'enemy' });
+      return { dmg: 0, isCrit: false, sideEffects };
+
+    case 'daze_shout':
+    case 'demoralize': {
+      const stunTicks = ability.durationTicks ?? ability.stunTicks ?? 2;
+      defender.stunUntilTick = Math.max(defender.stunUntilTick || -1, tick + stunTicks);
+      sideEffects.push({ type: 'stun', ticks: stunTicks, target: 'enemy' });
+      return { dmg: 0, isCrit: false, sideEffects };
+    }
+
+    case 'pet_unleash':
+    case 'pet_heal_over_time':
+      // Simplified: no pet tracking in PvP fight loop
+      return { dmg: 0, isCrit: false, sideEffects };
+  }
+
+  // ── Damage abilities ───────────────────────────────────────────────────────
+  const forcedCritIdx = attacker.activeEffects.findIndex(e => e.type === 'force_next_crit');
+  const forcedCrit = forcedCritIdx >= 0;
+  if (forcedCrit) attacker.activeEffects.splice(forcedCritIdx, 1);
+
+  // Active damage bonuses
+  let bonusDamagePct = 0;
+  for (const effect of attacker.activeEffects) {
+    if (effect.type === 'berserker_stance') bonusDamagePct += effect.damageDealtPct || 0;
+  }
+
+  // Hunter mark bonus on target (applies to abilities too)
+  let hunterDamagePct = 0;
+  for (const effect of (defender.activeEffects || [])) {
+    if (effect.type === 'hunter_mark') hunterDamagePct += effect.autoDamageBonusPct || 0;
+  }
+
+  // Damage reduction on defender
+  const defDR = (defender.activeEffects || []).reduce((s, e) =>
+    e.type === 'damage_reduction' ? s + (e.reductionPct || 0) : s, 0);
+
+  const damageMult   = ability.damageMult ?? 1.0;
+  const armorPenPct  = ability.armorPenPct ?? ability.armorIgnorePct ?? 0;
+  const critBonus    = ability.critChance ?? 0;
+
+  const base = baseAttackDamage(attacker, rng);
+  const effectiveCrit = Math.max(0, (attacker.critChance ?? 0) + critBonus - (defender.critResist ?? 0));
+  const isCrit = forcedCrit || rng() * 100 < effectiveCrit;
+  const totalMult = damageMult * (1 + bonusDamagePct / 100) * (1 + hunterDamagePct / 100) * (isCrit ? (attacker.critMult ?? 1.5) : 1);
+
+  let dmg = applyArmor(base * totalMult, getEffectiveArmor(defender), armorPenPct);
+  if (defDR > 0) dmg = Math.max(1, Math.floor(dmg * (1 - defDR / 100)));
+
+  // multi_hit: sum separate rolls
+  if (ability.type === 'multi_hit') {
+    const hitCount = Math.max(2, ability.hits ?? ability.hitCount ?? 2);
+    for (let i = 1; i < hitCount; i++) {
+      const extraBase = baseAttackDamage(attacker, rng);
+      dmg += applyArmor(extraBase * totalMult, getEffectiveArmor(defender), armorPenPct);
+    }
+  }
+
+  // execute: bonus damage below threshold, or instant kill if way below
+  if (ability.type === 'execute') {
+    const hpPct = defender.maxHp > 0 ? (defender.hp / defender.maxHp) * 100 : 100;
+    if (hpPct < (ability.requiresTargetHpPctBelow ?? 20)) {
+      dmg = Math.max(dmg, defender.hp); // finish them
+    }
+  }
+
+  // stun / stunblow
+  if (ability.type === 'stun' || ability.type === 'stunblow') {
+    const stunTicks = ability.stunTicks ?? 1;
+    defender.stunUntilTick = Math.max(defender.stunUntilTick || -1, tick + stunTicks);
+    sideEffects.push({ type: 'stun', ticks: stunTicks, target: 'enemy' });
+  }
+
+  // stagger_shot / stagger_spell
+  if (ability.type === 'stagger_shot' || ability.type === 'stagger_spell') {
+    const stagTicks = ability.staggerDurationTicks ?? ability.durationTicks ?? 2;
+    defender.stunUntilTick = Math.max(defender.stunUntilTick || -1, tick + stagTicks);
+    sideEffects.push({ type: 'stagger', ticks: stagTicks, target: 'enemy' });
+  }
+
+  // armor_shatter
+  if (ability.type === 'armor_shatter') {
+    const reduction = ability.armorReduction ?? 8;
+    defender.armorReduction = (defender.armorReduction || 0) + reduction;
+    sideEffects.push({ type: 'armor_shatter', reduction, total: defender.armorReduction, target: 'enemy' });
+  }
+
+  // open_vein: direct bleed stacks, no weapon hit damage
+  if (ability.type === 'open_vein') {
+    const stacksToAdd = ability.bleedStacks ?? 2;
+    const duration    = ability.bleedDuration ?? 3;
+    const damagePct   = ability.bleedDamagePct ?? 2;
+    applyBleed(defender, stacksToAdd, duration, damagePct, sideEffects);
+    // open_vein deals no weapon damage itself
+    return { dmg: 0, isCrit: false, sideEffects };
+  }
+
+  // hemorrhaging_shot: weapon damage + hemorrhage DoT
+  if (ability.type === 'hemorrhaging_shot') {
+    const duration  = ability.hemorrhageDuration ?? 3;
+    const damagePct = ability.hemorrhageDamagePct ?? 3;
+    const existing = (defender.activeEffects || []).find(e => e.type === 'hemorrhage');
+    if (existing) {
+      existing.remainingTicks = Math.max(existing.remainingTicks, duration);
+      existing.damagePctPerTick = Math.max(existing.damagePctPerTick, damagePct);
+    } else {
+      defender.activeEffects.push({ type: 'hemorrhage', stacks: 1, remainingTicks: duration, damagePctPerTick: damagePct });
+    }
+    sideEffects.push({ type: 'hemorrhage_applied', ticks: duration, target: 'enemy' });
+  }
+
+  return { dmg, isCrit, sideEffects };
+}
+
+// Apply bleed stacks to a target (adds/refreshes the bleed effect)
+function applyBleed(target, stacksToAdd, duration, damagePctPerTick, sideEffects) {
+  const existing = (target.activeEffects || []).find(e => e.type === 'bleed');
+  if (existing) {
+    existing.stacks      = Math.min(6, (existing.stacks || 1) + stacksToAdd);
+    existing.remainingTicks = Math.max(existing.remainingTicks, duration);
+    existing.damagePctPerTick = Math.max(existing.damagePctPerTick || 2, damagePctPerTick);
+  } else {
+    target.activeEffects.push({ type: 'bleed', stacks: stacksToAdd, remainingTicks: duration, damagePctPerTick });
+  }
+  const bleed = (target.activeEffects || []).find(e => e.type === 'bleed');
+  if (sideEffects) sideEffects.push({ type: 'bleed_applied', stacks: bleed?.stacks, ticks: duration, target: 'enemy' });
+}
+
+// ── per-tick active effect processing ────────────────────────────────────────
+function tickActiveEffects(combatant, tick, events, side) {
+  const keep = [];
+  for (const effect of (combatant.activeEffects || [])) {
+    switch (effect.type) {
+      case 'bleed':
+      case 'hemorrhage': {
+        if ((effect.remainingTicks || 0) <= 0) continue;
+        const stacks = Math.max(1, effect.stacks || 1);
+        const dmg = Math.max(1, Math.floor((combatant.maxHp || combatant.hp) * (effect.damagePctPerTick || 2) * stacks / 100));
+        combatant.hp = Math.max(0, combatant.hp - dmg);
+        events.push({ type: effect.type === 'hemorrhage' ? 'hemorrhage_tick' : 'bleed_tick', target: side, dmg, stacks });
+        effect.remainingTicks--;
+        if (effect.remainingTicks > 0) keep.push(effect);
+        break;
+      }
+      case 'heal_over_time': {
+        if ((effect.remainingTicks || 0) <= 0) continue;
+        const heal = Math.min(effect.healPerTick || 0, combatant.maxHp - combatant.hp);
+        combatant.hp = Math.min(combatant.maxHp, combatant.hp + (effect.healPerTick || 0));
+        events.push({ type: 'heal_tick', target: side, amount: heal });
+        effect.remainingTicks--;
+        if (effect.remainingTicks > 0) keep.push(effect);
+        break;
+      }
+      case 'berserker_stance':
+      case 'damage_reduction': {
+        if (effect.remainingTicks == null) { keep.push(effect); break; }
+        effect.remainingTicks--;
+        if (effect.remainingTicks > 0) keep.push(effect);
+        break;
+      }
+      case 'hunter_mark': {
+        if (effect.remainingTicks == null) { keep.push(effect); break; }
+        effect.remainingTicks--;
+        if (effect.remainingTicks > 0) keep.push(effect);
+        break;
+      }
+      default:
+        // Permanent until consumed (force_next_crit, heavy_strikes, rapid_fire, etc.)
+        keep.push(effect);
+    }
+  }
+  combatant.activeEffects = keep;
 }
 
 // ── SSE helpers ───────────────────────────────────────────────────────────────
@@ -141,6 +459,15 @@ function snapState(c, currentTick) {
     autoProgress:     c.autoProgress,
     ticksSinceAbility: currentTick - c.lastAbilityTick,
     abilities:        c.abilities,
+    // Phase 3 state
+    activeEffects:    (c.activeEffects || []).map(e => ({
+      type:           e.type,
+      remainingTicks: e.remainingTicks,
+      charges:        e.charges,
+      stacks:         e.stacks,
+    })),
+    armorReduction:   c.armorReduction || 0,
+    isStunned:        currentTick <= (c.stunUntilTick || -1),
   };
 }
 
@@ -153,33 +480,52 @@ function runTick(game) {
   const atk = game.challenger;
   const def = game.defender;
 
-  // auto-attacks
-  atk.autoProgress += atk.attackSpeed;
-  def.autoProgress += def.attackSpeed;
+  // 1. Tick DoTs, HoTs, buff durations
+  tickActiveEffects(atk, game.tick, events, 'challenger');
+  tickActiveEffects(def, game.tick, events, 'defender');
 
-  while (atk.autoProgress >= AUTO_ATTACK_TICKS) {
-    atk.autoProgress -= AUTO_ATTACK_TICKS;
-    const { dmg, isCrit } = calcHit(atk, def, game.atkRng);
-    def.hp = Math.max(0, def.hp - dmg);
-    events.push({ type: 'auto_attack', attacker: 'challenger', dmg, isCrit });
+  // 2. Early end — DoT may have finished a combatant
+  if (atk.hp <= 0 || def.hp <= 0) {
+    broadcast(game, { type: 'tick', tick: game.tick, challenger: snapState(atk, game.tick), defender: snapState(def, game.tick), events });
+    finishGame(game);
+    return;
   }
 
-  while (def.autoProgress >= AUTO_ATTACK_TICKS) {
-    def.autoProgress -= AUTO_ATTACK_TICKS;
-    const { dmg, isCrit } = calcHit(def, atk, game.defRng);
-    atk.hp = Math.max(0, atk.hp - dmg);
-    events.push({ type: 'auto_attack', attacker: 'defender', dmg, isCrit });
+  // 3. Auto-attacks (skip if stunned)
+  const atkStunned = game.tick <= (atk.stunUntilTick || -1);
+  const defStunned = game.tick <= (def.stunUntilTick || -1);
+
+  if (!atkStunned) {
+    atk.autoProgress += atk.attackSpeed;
+    while (atk.autoProgress >= AUTO_ATTACK_TICKS) {
+      atk.autoProgress -= AUTO_ATTACK_TICKS;
+      const { dmg, isCrit } = calcHit(atk, def, game.atkRng);
+      def.hp = Math.max(0, def.hp - dmg);
+      events.push({ type: 'auto_attack', attacker: 'challenger', dmg, isCrit });
+    }
   }
 
-  // abilities for each side
+  if (!defStunned) {
+    def.autoProgress += def.attackSpeed;
+    while (def.autoProgress >= AUTO_ATTACK_TICKS) {
+      def.autoProgress -= AUTO_ATTACK_TICKS;
+      const { dmg, isCrit } = calcHit(def, atk, game.defRng);
+      atk.hp = Math.max(0, atk.hp - dmg);
+      events.push({ type: 'auto_attack', attacker: 'defender', dmg, isCrit });
+    }
+  }
+
+  // 4. Abilities (skip if stunned)
   for (const [side, combatant, opponent, rng] of [
     ['challenger', atk, def, game.atkRng],
     ['defender',   def, atk, game.defRng],
   ]) {
-    const ticksSince   = game.tick - combatant.lastAbilityTick;
-    const cooldownOk   = ticksSince >= ABILITY_COOLDOWN_TICKS;
-    const hasPending   = combatant.pendingAbilityIdx !== null;
-    const shouldAuto   = ticksSince >= ABILITY_AUTO_TICKS && combatant.abilities.length > 0;
+    if (game.tick <= (combatant.stunUntilTick || -1)) continue;
+
+    const ticksSince = game.tick - combatant.lastAbilityTick;
+    const cooldownOk = ticksSince >= ABILITY_COOLDOWN_TICKS;
+    const hasPending = combatant.pendingAbilityIdx !== null;
+    const shouldAuto = ticksSince >= ABILITY_AUTO_TICKS && combatant.abilities.length > 0;
 
     if ((hasPending && cooldownOk) || shouldAuto) {
       const abilityCount = Math.max(1, combatant.abilities.length);
@@ -190,20 +536,24 @@ function runTick(game) {
       combatant.pendingAbilityIdx = null;
       combatant.lastAbilityTick   = game.tick;
 
-      const { dmg, isCrit } = calcAbilityHit(combatant, opponent, rng, idx);
-      opponent.hp = Math.max(0, opponent.hp - dmg);
+      const abilityId = combatant.abilities[idx] || null;
+      const { dmg, isCrit, sideEffects } = resolveAbilityPvP(combatant, opponent, abilityId, rng, game.tick);
+
+      if (dmg > 0) opponent.hp = Math.max(0, opponent.hp - dmg);
+
       events.push({
-        type:      'ability',
-        attacker:  side,
+        type:       'ability',
+        attacker:   side,
         abilityIdx: idx,
-        abilityId: combatant.abilities[idx] || null,
+        abilityId,
         dmg,
         isCrit,
+        sideEffects,
       });
     }
   }
 
-  // broadcast this tick
+  // 5. Broadcast tick
   broadcast(game, {
     type:       'tick',
     tick:       game.tick,
@@ -212,7 +562,7 @@ function runTick(game) {
     events,
   });
 
-  // check end conditions
+  // 6. End condition
   if (atk.hp <= 0 || def.hp <= 0 || game.tick >= MAX_FIGHT_TICKS) {
     finishGame(game);
   }
@@ -296,7 +646,6 @@ function startFight(game) {
 async function fightRoutes(fastify) {
   const verifyToken = createVerifier({ key: async () => process.env.JWT_SECRET });
 
-  // GET /fight/:id/prep — returns snaps + seed so the client can run the fight locally
   fastify.get('/fight/:id/prep', { preHandler: fastify.authenticate }, async (request, reply) => {
     const { id: challengeId } = request.params;
     const { id: userId }      = request.user;
@@ -331,8 +680,6 @@ async function fightRoutes(fastify) {
     };
   });
 
-  // GET /fight/:id/stream?token=JWT
-  // SSE — both challenger and defender connect here to watch the live fight.
   fastify.get('/fight/:id/stream', async (request, reply) => {
     const { id: challengeId } = request.params;
     const { token }           = request.query;
@@ -345,7 +692,6 @@ async function fightRoutes(fastify) {
     }
     const userId = String(user.id);
 
-    // Verify the user is part of this challenge
     const chRes = await pool.query(`
       SELECT ch.*,
         COALESCE(ch.defender_snap, dc.combat_snap) AS resolved_defender_snap
@@ -359,8 +705,6 @@ async function fightRoutes(fastify) {
     if (!chRes.rows[0]) return reply.status(404).send({ error: 'Challenge not found or not in prep' });
     const ch = chRes.rows[0];
 
-    // SSE setup — CORS headers must be set manually here because we bypass
-    // Fastify's normal response pipeline by writing directly to reply.raw.
     const origin = request.headers.origin || '*';
     reply.raw.setHeader('Access-Control-Allow-Origin',      origin);
     reply.raw.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -395,7 +739,6 @@ async function fightRoutes(fastify) {
 
     game.clients.set(userId, { reply, userId });
 
-    // If fight already started, send current state so late-joiner can sync
     if (game.started) {
       sendSSE(reply, {
         type:       'state',
@@ -405,7 +748,6 @@ async function fightRoutes(fastify) {
       });
     }
 
-    // Start fight when both players connected, or after timeout
     if (!game.started && game.clients.size >= 2) {
       clearTimeout(game.startTimer);
       startFight(game);
@@ -413,12 +755,10 @@ async function fightRoutes(fastify) {
       game.startTimer = setTimeout(() => startFight(game), CONNECT_TIMEOUT_MS);
     }
 
-    // Keep-alive ping every 20s (prevents Railway / proxy from closing idle SSE)
     const ping = setInterval(() => {
       try { reply.raw.write(': ping\n\n'); } catch {}
     }, 20000);
 
-    // Resolve when client disconnects
     return new Promise((resolve) => {
       request.raw.on('close', () => {
         clearInterval(ping);
@@ -428,8 +768,6 @@ async function fightRoutes(fastify) {
     });
   });
 
-  // POST /fight/:id/action
-  // Player submits an ability choice. Server queues it for the next tick.
   fastify.post('/fight/:id/action', { preHandler: fastify.authenticate }, async (request, reply) => {
     const { id: challengeId } = request.params;
     const { id: userId }      = request.user;
@@ -455,7 +793,6 @@ async function fightRoutes(fastify) {
     return { ok: true };
   });
 
-  // GET /fight/:id/state  (for reconnect / polling fallback)
   fastify.get('/fight/:id/state', { preHandler: fastify.authenticate }, async (request, reply) => {
     const { id: challengeId } = request.params;
     const { id: userId }      = request.user;
