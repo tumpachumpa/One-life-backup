@@ -3304,6 +3304,13 @@
               "id": "rst_skeleton",
               "type": "combat",
               "enemyId": "rootspire_restless_skeleton",
+              "enemyIds": [
+                "rootspire_restless_skeleton",
+                "rootspire_restless_skeleton",
+                "rootspire_restless_skeleton"
+              ],
+              "bossDeathEndsFight": false,
+              "addsDespawnOnBossDeath": false,
               "encounterCap": 1,
               "repeatable": true,
               "charges": {
