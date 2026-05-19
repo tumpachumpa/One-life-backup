@@ -9,6 +9,15 @@
       ],
       "dropChance": 0.55
     },
+    "crow_swarm": {
+      "rolls": 1,
+      "dropChance": 0.35,
+      "includeItemIds": ["bone", "ration"],
+      "itemWeights": {
+        "bone": 7,
+        "ration": 2
+      }
+    },
     "forest_wolf": {
       "rolls": 1,
       "tags": [
@@ -397,6 +406,61 @@
         "warg_fang_necklace": 1
       }
     },
+    "troll_small": {
+      "rolls": 1,
+      "dropChance": 0.65,
+      "includeItemIds": ["bone", "campfire"],
+      "itemWeights": {
+        "bone": 5,
+        "campfire": 2
+      },
+      "rarityTable": "normal",
+      "generatedEquipment": {
+        "enabled": true,
+        "dropChance": 0.08,
+        "itemLevelBonus": 2,
+        "baseIds": [
+          "mace_1h",
+          "plate_chest",
+          "plate_legs",
+          "heater_shield"
+        ]
+      },
+      "equipmentDrops": {
+        "dropChance": 0.03,
+        "items": { "troll_hide_vest": 1, "troll_hide_legs": 1 }
+      }
+    },
+    "warg_rider": {
+      "rolls": 1,
+      "dropChance": 0.70,
+      "includeItemIds": [
+        "warg_meat",
+        "warg_fat",
+        "warg_fang_necklace",
+        "ration"
+      ],
+      "itemWeights": {
+        "warg_meat": 5,
+        "ration": 3,
+        "warg_fat": 2,
+        "warg_fang_necklace": 1
+      },
+      "rarityTable": "normal",
+      "generatedEquipment": {
+        "enabled": true,
+        "dropChance": 0.12,
+        "itemLevelBonus": 2,
+        "baseIds": [
+          "axe_1h",
+          "spear_2h",
+          "heavy_crossbow",
+          "tracker_hood",
+          "tracker_vest",
+          "tracker_legs"
+        ]
+      }
+    },
     "orc_shaman_boss": {
       "rolls": 2,
       "tags": [
@@ -633,6 +697,28 @@
         "baseIds": ["sword_1h", "mace_1h", "heater_shield", "buckler"]
       }
     },
+    "crypts_wraith": {
+      "rolls": 1,
+      "dropChance": 0.45,
+      "includeItemIds": ["bone", "ward_amulet", "protection_amulet"],
+      "itemWeights": {
+        "bone": 7,
+        "ward_amulet": 2,
+        "protection_amulet": 1
+      },
+      "rarityTable": "normal",
+      "generatedEquipment": {
+        "enabled": true,
+        "dropChance": 0.10,
+        "itemLevel": 3,
+        "baseIds": [
+          "staff",
+          "wraith_shroud",
+          "shadowleather_hood",
+          "shadowleather_vest"
+        ]
+      }
+    },
     "lich_boss": {
       "rolls": 1,
       "tags": [
@@ -792,6 +878,259 @@
         "quiver": 2,
         "protection_amulet": 3,
         "thorn_amulet": 2
+      }
+    },
+    "gargoyle": {
+      "rolls": 1,
+      "dropChance": 0.45,
+      "includeItemIds": ["ash", "gargoyle_stone_ring"],
+      "itemWeights": {
+        "ash": 8,
+        "gargoyle_stone_ring": 1
+      },
+      "rarityTable": "rootspire",
+      "generatedEquipment": {
+        "enabled": true,
+        "dropChance": 0.10,
+        "itemLevelBonus": 4,
+        "baseIds": [
+          "stoneguard_mace",
+          "plate_chest",
+          "plate_gloves",
+          "tower_shield",
+          "gargoyle_stone_ring"
+        ]
+      }
+    },
+    "oathbound_squire": {
+      "rolls": 1,
+      "dropChance": 0.55,
+      "includeItemIds": ["ward_amulet", "protection_amulet"],
+      "itemWeights": {
+        "ward_amulet": 2,
+        "protection_amulet": 1
+      },
+      "rarityTable": "rootspire",
+      "generatedEquipment": {
+        "enabled": true,
+        "dropChance": 0.10,
+        "itemLevelBonus": 4,
+        "baseIds": [
+          "oathbound_longsword",
+          "oathbound_plate_helm",
+          "oathbound_plate_cuirass",
+          "oathbound_plate_legguards",
+          "heater_shield",
+          "tower_shield"
+        ]
+      }
+    },
+    "fierce_hound": {
+      "rolls": 1,
+      "dropChance": 0.50,
+      "includeItemIds": ["bone", "ash", "hellhound_collar"],
+      "itemWeights": {
+        "bone": 5,
+        "ash": 3,
+        "hellhound_collar": 1
+      }
+    },
+    "animated_armor": {
+      "rolls": 1,
+      "tags": [],
+      "dropChance": 0,
+      "rarityTable": "rootspire",
+      "generatedEquipment": {
+        "enabled": true,
+        "dropChance": 0.14,
+        "itemLevelBonus": 4,
+        "baseIds": [
+          "plate_helm",
+          "plate_chest",
+          "plate_legs",
+          "plate_boots",
+          "plate_gloves",
+          "oathbound_plate_helm",
+          "oathbound_plate_cuirass",
+          "oathbound_plate_legguards",
+          "oathbound_plate_sabatons",
+          "oathbound_plate_gauntlets",
+          "heater_shield",
+          "tower_shield"
+        ]
+      },
+      "equipmentDrops": {
+        "dropChance": 0.02,
+        "items": { "black_knight_boots": 1, "black_knight_gauntlets": 1 }
+      }
+    },
+    "ashbound_cultist": {
+      "rolls": 1,
+      "dropChance": 0.55,
+      "includeItemIds": ["ash", "ward_amulet", "imp_ember_ring"],
+      "itemWeights": {
+        "ash": 7,
+        "ward_amulet": 1,
+        "imp_ember_ring": 1
+      },
+      "rarityTable": "rootspire",
+      "generatedEquipment": {
+        "enabled": true,
+        "dropChance": 0.10,
+        "itemLevelBonus": 4,
+        "baseIds": [
+          "ritual_dagger",
+          "staff",
+          "spireweave_cowl",
+          "spireweave_robe",
+          "spireweave_handwraps",
+          "duskrunner_hood",
+          "duskrunner_jacket",
+          "nightfall_cape"
+        ]
+      }
+    },
+    "arcane_wraith": {
+      "rolls": 1,
+      "dropChance": 0.50,
+      "includeItemIds": ["ward_amulet", "protection_amulet", "veilstone_ring"],
+      "itemWeights": {
+        "ward_amulet": 4,
+        "protection_amulet": 2,
+        "veilstone_ring": 1
+      },
+      "rarityTable": "rootspire",
+      "generatedEquipment": {
+        "enabled": true,
+        "dropChance": 0.10,
+        "itemLevelBonus": 4,
+        "baseIds": [
+          "staff",
+          "wraith_shroud",
+          "spireweave_cowl",
+          "spireweave_robe",
+          "veilstone_ring",
+          "umbralward_amulet",
+          "nightfall_cape"
+        ]
+      }
+    },
+    "spellbound_sentinel": {
+      "rolls": 1,
+      "dropChance": 0.55,
+      "includeItemIds": ["ward_amulet", "protection_amulet", "sentinel_focus_ring"],
+      "itemWeights": {
+        "ward_amulet": 2,
+        "protection_amulet": 3,
+        "sentinel_focus_ring": 1
+      },
+      "rarityTable": "rootspire",
+      "generatedEquipment": {
+        "enabled": true,
+        "dropChance": 0.10,
+        "itemLevelBonus": 4,
+        "baseIds": [
+          "sentinel_focus_ring",
+          "oathbound_longsword",
+          "stoneguard_mace",
+          "oathbound_plate_cuirass",
+          "oathbound_plate_gauntlets",
+          "heater_shield",
+          "tower_shield"
+        ]
+      }
+    },
+    "rootspire_restless_skeleton": {
+      "rolls": 1,
+      "dropChance": 0.45,
+      "includeItemIds": ["bone", "bandage"],
+      "itemWeights": {
+        "bone": 8,
+        "bandage": 3
+      },
+      "rarityTable": "rootspire",
+      "generatedEquipment": {
+        "enabled": true,
+        "dropChance": 0.08,
+        "itemLevelBonus": 4,
+        "baseIds": [
+          "sword_1h",
+          "mace_1h",
+          "bone_shield",
+          "bonewarden_helm",
+          "bonewarden_vest"
+        ]
+      }
+    },
+    "ash_imp": {
+      "rolls": 1,
+      "dropChance": 0.45,
+      "includeItemIds": ["ash", "campfire", "imp_ember_ring"],
+      "itemWeights": {
+        "ash": 7,
+        "campfire": 2,
+        "imp_ember_ring": 1
+      },
+      "rarityTable": "rootspire",
+      "generatedEquipment": {
+        "enabled": true,
+        "dropChance": 0.06,
+        "itemLevelBonus": 4,
+        "baseIds": [
+          "imp_ember_ring",
+          "emberglass_ring",
+          "cinderward_amulet"
+        ]
+      }
+    },
+    "cinder_salamander": {
+      "rolls": 1,
+      "dropChance": 0.55,
+      "includeItemIds": ["ash", "campfire", "emberglass_ring", "cinderward_amulet"],
+      "itemWeights": {
+        "ash": 6,
+        "campfire": 2,
+        "emberglass_ring": 1,
+        "cinderward_amulet": 1
+      },
+      "rarityTable": "rootspire",
+      "generatedEquipment": {
+        "enabled": true,
+        "dropChance": 0.08,
+        "itemLevelBonus": 4,
+        "baseIds": [
+          "ashenwood_shortbow",
+          "duskrunner_jacket",
+          "duskrunner_boots",
+          "cinderward_amulet",
+          "emberward_cape"
+        ]
+      }
+    },
+    "wyvern_whelp": {
+      "rolls": 1,
+      "dropChance": 0.60,
+      "includeItemIds": ["quiver", "ash", "emberward_cape"],
+      "itemWeights": {
+        "quiver": 5,
+        "ash": 3,
+        "emberward_cape": 1
+      },
+      "rarityTable": "rootspire",
+      "generatedEquipment": {
+        "enabled": true,
+        "dropChance": 0.10,
+        "itemLevelBonus": 4,
+        "baseIds": [
+          "ashenwood_longbow",
+          "wyvernbone_arbalest",
+          "pathfinder_hood",
+          "pathfinder_jacket",
+          "pathfinder_legs",
+          "pathfinder_boots",
+          "duskrunner_hood",
+          "duskrunner_jacket"
+        ]
       }
     },
     "rootspire_elite": {
@@ -1006,11 +1345,15 @@
         "dropChance": 0.07,
         "itemLevelBonus": 4,
         "baseIds": [
+          "stoneguard_mace",
           "mace_1h",
           "greatsword_2h",
           "plate_helm",
           "plate_chest",
           "plate_legs",
+          "oathbound_plate_cuirass",
+          "oathbound_plate_legguards",
+          "gargoyle_stone_ring",
           "heater_shield",
           "tower_shield"
         ]
@@ -1051,9 +1394,14 @@
         "baseIds": [
           "staff",
           "rapier",
-          "cloth_chest",
-          "leather_chest",
-          "leather_gloves"
+          "ritual_dagger",
+          "spireweave_cowl",
+          "spireweave_robe",
+          "spireweave_handwraps",
+          "duskrunner_jacket",
+          "veilstone_ring",
+          "umbralward_amulet",
+          "nightfall_cape"
         ]
       }
     },

@@ -291,7 +291,7 @@
           "value": 10
         }
       ],
-      "lootTable": "forest_basic"
+      "lootTable": "crow_swarm"
     },
     {
       "id": "boar",
@@ -674,7 +674,7 @@
           "aiWeight": 10
         }
       ],
-      "lootTable": "orc_basic"
+      "lootTable": "troll_small"
     },
     {
       "id": "warg",
@@ -726,7 +726,7 @@
       },
       "effects": [],
       "abilities": [],
-      "lootTable": "orc_basic"
+      "lootTable": "warg_rider"
     },
     {
       "id": "cave_troll",
@@ -834,7 +834,6 @@
       "tags": [
         "undead"
       ],
-      "lootTable": "crypts_warrior",
       "abilities": [
         {
           "id": "bone_haste",
@@ -848,7 +847,7 @@
           "attackSpeedBonusPct": 50
         }
       ],
-      "lootTable": "forest_basic"
+      "lootTable": "crypts_warrior"
     },
     {
       "id": "ghoul",
@@ -944,7 +943,7 @@
           }
         }
       ],
-      "lootTable": "forest_magic"
+      "lootTable": "crypts_wraith"
     },
     {
       "id": "zombie",
@@ -1033,7 +1032,7 @@
           "missPenalty": 35
         }
       ],
-      "lootTable": "rootspire_basic"
+      "lootTable": "gargoyle"
     },
     {
       "id": "black_knight",
@@ -1330,7 +1329,7 @@
           "stunTicks": 2
         }
       ],
-      "lootTable": "rootspire_basic"
+      "lootTable": "oathbound_squire"
     },
     {
       "id": "fierce_hound",
@@ -1367,7 +1366,7 @@
         "construct",
         "beast"
       ],
-      "lootTable": "rootspire_basic"
+      "lootTable": "fierce_hound"
     },
     {
       "id": "animated_armor",
@@ -1395,7 +1394,7 @@
           "value": 10
         }
       ],
-      "lootTable": "rootspire_basic"
+      "lootTable": "animated_armor"
     },
     {
       "id": "ashbound_cultist",
@@ -1455,7 +1454,7 @@
         "shadow",
         "cultist"
       ],
-      "lootTable": "rootspire_basic"
+      "lootTable": "ashbound_cultist"
     },
     {
       "id": "arcane_wraith",
@@ -1495,7 +1494,7 @@
         "spirit",
         "undead"
       ],
-      "lootTable": "rootspire_basic"
+      "lootTable": "arcane_wraith"
     },
     {
       "id": "spellbound_sentinel",
@@ -1564,7 +1563,7 @@
         "arcane",
         "construct"
       ],
-      "lootTable": "rootspire_basic"
+      "lootTable": "spellbound_sentinel"
     },
     {
       "id": "rootspire_restless_skeleton",
@@ -1597,7 +1596,7 @@
         "skeleton",
         "rootspire"
       ],
-      "lootTable": "rootspire_basic"
+      "lootTable": "rootspire_restless_skeleton"
     },
     {
       "id": "stone_golem",
@@ -1672,7 +1671,7 @@
           "blockPowerRecoverPct": 40
         }
       ],
-      "lootTable": "rootspire_elite"
+      "lootTable": "stone_golem"
     },
     {
       "id": "ash_imp",
@@ -1728,7 +1727,7 @@
         "fire",
         "demon"
       ],
-      "lootTable": "rootspire_basic"
+      "lootTable": "ash_imp"
     },
     {
       "id": "cinder_salamander",
@@ -1763,7 +1762,7 @@
         "fire",
         "beast"
       ],
-      "lootTable": "rootspire_basic"
+      "lootTable": "cinder_salamander"
     },
     {
       "id": "wyvern_whelp",
@@ -1820,7 +1819,7 @@
         "fire",
         "dragonkin"
       ],
-      "lootTable": "rootspire_basic"
+      "lootTable": "wyvern_whelp"
     },
     {
       "id": "abyssal_fiend",
@@ -1895,7 +1894,7 @@
           "attacksRemaining": 2
         }
       ],
-      "lootTable": "rootspire_elite"
+      "lootTable": "abyssal_fiend"
     },
     {
       "id": "cave_spiderling",

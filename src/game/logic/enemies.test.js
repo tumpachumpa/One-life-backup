@@ -80,7 +80,7 @@ describe("enemy scaling", () => {
         attack: 13,
         armor: 4,
       },
-      lootTable: "rootspire_basic",
+      lootTable: "rootspire_restless_skeleton",
     });
     expect(enemyById.rootspire_restless_skeleton.effects).toContainEqual(expect.objectContaining({
       type: "revive_if_group_alive",
