@@ -119,6 +119,8 @@ function makeCombatant(snap, side) {
     armorReduction:   0,
     stunUntilTick:    -1,
     passiveEffects:   s.passiveEffects || [],
+    heroClass:        s.heroClass || null,
+    energy:           s.heroClass === 'rogue' ? 0 : null,
   };
 }
 
@@ -173,11 +175,22 @@ function calcHit(attacker, defender, rng) {
     }
   }
 
+  // Vulnerable (damage_taken_bonus_pct) on defender
+  const vulnerablePct = (defender.activeEffects || []).reduce((s, e) =>
+    e.type === 'damage_taken_bonus_pct' ? s + (e.value || 0) : s, 0);
+
   const effectiveCrit = Math.max(0, (attacker.critChance ?? 0) + hunterMarkCritBonus - (defender.critResist ?? 0));
   const isCrit = forcedCrit || rng() * 100 < effectiveCrit;
-  const totalMult = (1 + bonusDamagePct / 100) * (1 + hunterMarkDamagePct / 100) * (isCrit ? (attacker.critMult ?? 1.5) : 1);
+  const totalMult = (1 + bonusDamagePct / 100) * (1 + hunterMarkDamagePct / 100) * (1 + vulnerablePct / 100) * (isCrit ? (attacker.critMult ?? 1.5) : 1);
   const rawDmg = base * totalMult;
   const dmg = applyArmor(rawDmg, getEffectiveArmor(defender), 0);
+
+  // bleed_on_hit from passive effects
+  const bleedPassive = (attacker.passiveEffects || []).find(e => e.type === 'bleed_on_hit');
+  if (bleedPassive && rng() * 100 < (bleedPassive.chance || 0)) {
+    applyBleed(defender, 1, bleedPassive.duration || 2, bleedPassive.damagePct || 2, null);
+  }
+
   return { dmg, isCrit };
 }
 
@@ -194,6 +207,12 @@ function resolveAbilityPvP(attacker, defender, abilityId, rng, tick) {
     const rawDmg = base * 1.5 * (isCrit ? (attacker.critMult ?? 1.5) : 1);
     const dmg = applyArmor(rawDmg, getEffectiveArmor(defender), 0);
     return { dmg, isCrit, sideEffects };
+  }
+
+  // Energy gate — rogues must have enough energy to fire the ability
+  const energyCost = ability.energyCost || 0;
+  if (attacker.energy !== null && energyCost > 0 && (attacker.energy || 0) < energyCost) {
+    return { dmg: 0, isCrit: false, sideEffects };
   }
 
   // ── Self-buff / no-damage abilities ──────────────────────────────────────
@@ -283,6 +302,34 @@ function resolveAbilityPvP(attacker, defender, abilityId, rng, tick) {
     case 'pet_heal_over_time':
       // Simplified: no pet tracking in PvP fight loop
       return { dmg: 0, isCrit: false, sideEffects };
+
+    case 'detonate_marks': {
+      const markEff = (defender.activeEffects || []).find(e => e.type === 'shadow_mark');
+      const markStacks = markEff?.stacks || 0;
+      if (markStacks === 0) return { dmg: 0, isCrit: false, sideEffects };
+      const currentEnergy = attacker.energy || 0;
+      if (attacker.energy !== null) attacker.energy = Math.max(0, currentEnergy - energyCost);
+      const damagePerMark = ability.damagePerMark || 0.5;
+      const dmg = Math.max(1, Math.floor(attacker.damage * damagePerMark * markStacks));
+      defender.hp = Math.max(0, defender.hp - dmg);
+      defender.activeEffects = (defender.activeEffects || []).filter(e => e.type !== 'shadow_mark');
+      sideEffects.push({ type: 'detonate', markStacks, dmg, target: 'enemy' });
+      if (ability.vulnerable && currentEnergy >= (ability.vulnerable.minEnergy || 60)) {
+        defender.activeEffects = defender.activeEffects.filter(e => !(e.type === 'damage_taken_bonus_pct' && e.source === 'detonate'));
+        defender.activeEffects.push({ type: 'damage_taken_bonus_pct', value: ability.vulnerable.damageTakenPct || 15, remainingTicks: ability.vulnerable.durationTicks || 5, source: 'detonate' });
+        sideEffects.push({ type: 'buff', effect: 'vulnerable', target: 'enemy' });
+      }
+      if (ability.stun && currentEnergy >= (ability.stun.minEnergy || 80)) {
+        defender.stunUntilTick = Math.max(defender.stunUntilTick || -1, tick + (ability.stun.ticks || 1));
+        sideEffects.push({ type: 'stun', ticks: ability.stun.ticks || 1, target: 'enemy' });
+      }
+      return { dmg, isCrit: false, sideEffects };
+    }
+  }
+
+  // Deduct energy for damage abilities
+  if (attacker.energy !== null && energyCost > 0) {
+    attacker.energy = Math.max(0, (attacker.energy || 0) - energyCost);
   }
 
   // ── Damage abilities ───────────────────────────────────────────────────────
@@ -356,6 +403,11 @@ function resolveAbilityPvP(attacker, defender, abilityId, rng, tick) {
     sideEffects.push({ type: 'armor_shatter', reduction, total: defender.armorReduction, target: 'enemy' });
   }
 
+  // empowered_attack (shadowstrike): always applies 1 shadow mark
+  if (ability.type === 'empowered_attack') {
+    applyOrStackShadowMark(defender, 1, sideEffects);
+  }
+
   // open_vein: direct bleed stacks, no weapon hit damage
   if (ability.type === 'open_vein') {
     const stacksToAdd = ability.bleedStacks ?? 2;
@@ -381,6 +433,18 @@ function resolveAbilityPvP(attacker, defender, abilityId, rng, tick) {
   }
 
   return { dmg, isCrit, sideEffects };
+}
+
+// Apply shadow mark stacks to a target
+function applyOrStackShadowMark(target, stacks, sideEffects) {
+  const existing = (target.activeEffects || []).find(e => e.type === 'shadow_mark');
+  if (existing) {
+    existing.stacks = Math.min(5, (existing.stacks || 1) + stacks);
+  } else {
+    target.activeEffects.push({ type: 'shadow_mark', stacks });
+  }
+  const total = (target.activeEffects || []).find(e => e.type === 'shadow_mark')?.stacks || stacks;
+  if (sideEffects) sideEffects.push({ type: 'shadow_mark_applied', stacks: total, target: 'enemy' });
 }
 
 // Apply bleed stacks to a target (adds/refreshes the bleed effect)
@@ -423,7 +487,8 @@ function tickActiveEffects(combatant, tick, events, side) {
         break;
       }
       case 'berserker_stance':
-      case 'damage_reduction': {
+      case 'damage_reduction':
+      case 'damage_taken_bonus_pct': {
         if (effect.remainingTicks == null) { keep.push(effect); break; }
         effect.remainingTicks--;
         if (effect.remainingTicks > 0) keep.push(effect);
@@ -435,6 +500,10 @@ function tickActiveEffects(combatant, tick, events, side) {
         if (effect.remainingTicks > 0) keep.push(effect);
         break;
       }
+      case 'shadow_mark':
+        // Permanent until detonated
+        keep.push(effect);
+        break;
       default:
         // Permanent until consumed (force_next_crit, heavy_strikes, rapid_fire, etc.)
         keep.push(effect);
@@ -468,6 +537,7 @@ function snapState(c, currentTick) {
     })),
     armorReduction:   c.armorReduction || 0,
     isStunned:        currentTick <= (c.stunUntilTick || -1),
+    energy:           c.energy ?? null,
   };
 }
 
@@ -483,6 +553,10 @@ function runTick(game) {
   // 1. Tick DoTs, HoTs, buff durations
   tickActiveEffects(atk, game.tick, events, 'challenger');
   tickActiveEffects(def, game.tick, events, 'defender');
+
+  // 1b. Energy regen for rogue class
+  if (atk.energy !== null) atk.energy = Math.min(100, (atk.energy || 0) + 5);
+  if (def.energy !== null) def.energy = Math.min(100, (def.energy || 0) + 5);
 
   // 2. Early end — DoT may have finished a combatant
   if (atk.hp <= 0 || def.hp <= 0) {

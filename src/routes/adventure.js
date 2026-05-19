@@ -289,10 +289,17 @@ async function adventureRoutes(fastify) {
       { completedDifficultyStars: session.progress?.activeDifficultyStars ?? 0 }
     );
 
-    // Apply XP and gold server-side — client cannot inflate these via POST /hero
+    // Apply XP and gold server-side. Subtract what was already applied via intermediate hero saves
+    // (saves are no longer clamped downward, so XP/gold may already be partially reflected in the DB).
     if (saveData.hero) {
-      saveData.hero.xp   = (saveData.hero.xp   || 0) + (session.run_xp   || 0);
-      saveData.hero.gold = (saveData.hero.gold  || 0) + (session.run_gold || 0);
+      const startXp     = session.hero_snap?.xp   || 0;
+      const startGold   = session.hero_snap?.gold || 0;
+      const appliedXp   = Math.max(0, (saveData.hero.xp   || 0) - startXp);
+      const appliedGold = Math.max(0, (saveData.hero.gold || 0) - startGold);
+      const pendingXp   = Math.max(0, (session.run_xp   || 0) - appliedXp);
+      const pendingGold = Math.max(0, (session.run_gold || 0) - appliedGold);
+      saveData.hero.xp   = (saveData.hero.xp   || 0) + pendingXp;
+      saveData.hero.gold = (saveData.hero.gold || 0) + pendingGold;
     }
 
     // Queue loot items for client to place on next GET /hero

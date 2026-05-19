@@ -1,6 +1,11 @@
 const pool = require('../db/pool');
 
+// ESM game modules — loaded once, reused across requests
+const heroLogicP = import('../game/logic/hero.js');
+const inventoryLogicP = import('../game/logic/inventory.js');
+
 const ESSENCE_PER_HOUR = 100;
+const INV_COLS = 5; // mirrors client constants.js
 
 function reduceOrRemoveSlot(grid, idx, qty) {
   const slot = grid[idx];
@@ -108,6 +113,78 @@ async function applyPendingLoot(saveData, userId) {
 const VALID_SLOT_IDS = new Set(['slot_1', 'slot_2', 'slot_3']);
 
 async function heroRoutes(fastify) {
+  // POST /hero/create — atomically create a new character on the server and store it.
+  // The hero is born on the server; client never writes unvalidated creation data.
+  fastify.post('/hero/create', { preHandler: fastify.authenticate }, async (request, reply) => {
+    const { id } = request.user;
+    const { slot_id: slotId, name, heroClass, gender, weapon } = request.body || {};
+
+    if (!VALID_SLOT_IDS.has(slotId)) return reply.status(400).send({ error: 'Invalid slot_id' });
+    const trimmedName = String(name || '').trim().slice(0, 24);
+    if (!trimmedName) return reply.status(400).send({ error: 'Name required' });
+
+    // Refuse if the slot already has a live character
+    const existing = await pool.query(
+      'SELECT save_data FROM heroes WHERE user_id = $1 AND slot_id = $2',
+      [id, slotId]
+    );
+    if (existing.rows[0]?.save_data?.hero?.characterCreated) {
+      return reply.status(409).send({ error: 'slot_occupied' });
+    }
+
+    // Enforce global character name uniqueness (case-insensitive, across all users)
+    const nameTaken = await pool.query(
+      `SELECT 1 FROM heroes WHERE save_data->'hero'->>'name' ILIKE $1 AND save_data->'hero'->>'characterCreated' = 'true' LIMIT 1`,
+      [trimmedName]
+    );
+    if (nameTaken.rows.length > 0) {
+      return reply.status(409).send({ error: 'name_taken' });
+    }
+
+    const { initHero, calcStats } = await heroLogicP;
+    const { migrateToGrid } = await inventoryLogicP;
+
+    const rawHero = initHero(trimmedName, {
+      heroClass: heroClass || 'fighter',
+      gender: gender || 'male',
+      characterCreated: true,
+      weapon: weapon || null,
+    });
+
+    const invRows = Math.max(6, Math.ceil((calcStats(rawHero).inventorySlots || 30) / INV_COLS));
+    const hero = { ...rawHero, inventory: migrateToGrid(rawHero.inventory, invRows) };
+
+    const saveData = {
+      hero,
+      selectedAdventureId: 'dungeon_depths',
+      selectedZoneId: 'dungeon',
+      worldRegionId: 'eastern_wilds',
+      worldLocationId: 'camp',
+      worldView: 'tilemap',
+      worldLayer: 'surface',
+      playerTilePos: { col: 10, row: 120 },
+      adventureProgress: {},
+      zoneProgress: {},
+      unlockedZones: [],
+      pendingLoot: [],
+      resources: { campfireCooks: 0 },
+      jobs: { queue: [], pendingLoot: [] },
+      skills: { gathering: { xp: 0 }, crafting: { xp: 0 }, survival: { xp: 0 } },
+      bestiary: {},
+      stash: [[], [], []],
+      savedAt: new Date().toISOString(),
+    };
+
+    await pool.query(
+      `INSERT INTO heroes (user_id, slot_id, save_data, updated_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (user_id, slot_id) DO UPDATE SET save_data = $3, updated_at = NOW()`,
+      [id, slotId, saveData]
+    );
+
+    return { ok: true, saveData };
+  });
+
   // GET /hero — return all saved slots for this user as { slots: { slot_1: {...}, ... } }
   fastify.get('/hero', { preHandler: fastify.authenticate }, async (request) => {
     const { id } = request.user;
@@ -147,12 +224,6 @@ async function heroRoutes(fastify) {
         data.hero.gold = (data.hero.gold || 0) + earnedGold;
         dirtySlotId = row.slot_id;
       }
-      // Rescue players stuck on the mountain layer (no passable cells exist there yet)
-      if (data.worldLayer === 'mountain') {
-        data.worldLayer = 'surface';
-        data.playerTilePos = { col: 10, row: 120 };
-        dirtySlotId = dirtySlotId || row.slot_id;
-      }
       slots[row.slot_id] = data;
     }
 
@@ -181,19 +252,28 @@ async function heroRoutes(fastify) {
       'SELECT save_data FROM heroes WHERE user_id = $1 AND slot_id = $2',
       [id, slotId]
     );
+    let heroWasClamped = false;
     if (hero.hero) {
       if (existingResult.rows[0]) {
         const dbHero = existingResult.rows[0].save_data?.hero || {};
-        if (typeof dbHero.xp === 'number' && (hero.hero.xp ?? 0) > dbHero.xp) {
-          hero.hero.xp = dbHero.xp;
+        const clientName = hero.hero.name;
+        const dbName = dbHero.name;
+        // Safety: if names differ and DB has a real character, refuse the save to prevent slot confusion
+        if (dbName && clientName && dbName !== clientName && dbHero.characterCreated) {
+          return reply.status(409).send({ error: 'slot_character_mismatch', dbName, clientName });
         }
-        if (typeof dbHero.gold === 'number' && (hero.hero.gold ?? 0) > dbHero.gold) {
+        if (typeof dbHero.xp === 'number' && (hero.hero.xp ?? 0) < dbHero.xp) {
+          hero.hero.xp = dbHero.xp;
+          heroWasClamped = true;
+        }
+        if (typeof dbHero.gold === 'number' && (hero.hero.gold ?? 0) < dbHero.gold) {
           hero.hero.gold = dbHero.gold;
+          heroWasClamped = true;
         }
       } else {
-        // First save — new heroes start at 0; clamp any inflated client values
-        if ((hero.hero.xp ?? 0) > 0) hero.hero.xp = 0;
-        if ((hero.hero.gold ?? 0) > 0) hero.hero.gold = 0;
+        // First save for this slot — new heroes start at 0; clamp any inflated client values
+        if ((hero.hero.xp ?? 0) > 0) { hero.hero.xp = 0; heroWasClamped = true; }
+        if ((hero.hero.gold ?? 0) > 0) { hero.hero.gold = 0; heroWasClamped = true; }
       }
     }
 
@@ -208,7 +288,8 @@ async function heroRoutes(fastify) {
     );
     return {
       ok: true,
-      ...(removalsApplied ? { appliedHero: hero.hero } : {}),
+      // Return appliedHero whenever hero values were changed server-side so client stays in sync
+      ...((removalsApplied || heroWasClamped) ? { appliedHero: hero.hero } : {}),
       ...(lootApplied ? { appliedPendingLoot: hero.pendingLoot || [] } : {}),
     };
   });
