@@ -575,8 +575,66 @@
         "fragment_sacred_horn"
       ]
     },
+    "crypts_skeleton": {
+      "rolls": 1,
+      "dropChance": 0.45,
+      "includeItemIds": ["bone", "bandage"],
+      "itemWeights": {
+        "bone": 8,
+        "bandage": 4
+      },
+      "generatedEquipment": {
+        "enabled": true,
+        "dropChance": 0.10,
+        "itemLevel": 2,
+        "baseIds": ["mace_1h", "axe_1h"]
+      }
+    },
+    "crypts_zombie": {
+      "rolls": 1,
+      "dropChance": 0.45,
+      "includeItemIds": ["bone", "bandage"],
+      "itemWeights": {
+        "bone": 6,
+        "bandage": 6
+      },
+      "generatedEquipment": {
+        "enabled": true,
+        "dropChance": 0.08,
+        "itemLevel": 2,
+        "baseIds": ["greatsword_2h", "greataxe_2h"]
+      }
+    },
+    "crypts_ghoul": {
+      "rolls": 1,
+      "dropChance": 0.50,
+      "includeItemIds": ["bone"],
+      "itemWeights": {
+        "bone": 6
+      },
+      "generatedEquipment": {
+        "enabled": true,
+        "dropChance": 0.10,
+        "itemLevel": 3,
+        "baseIds": ["dagger", "rapier"]
+      }
+    },
+    "crypts_warrior": {
+      "rolls": 1,
+      "dropChance": 0.55,
+      "includeItemIds": ["bone"],
+      "itemWeights": {
+        "bone": 5
+      },
+      "generatedEquipment": {
+        "enabled": true,
+        "dropChance": 0.12,
+        "itemLevel": 3,
+        "baseIds": ["sword_1h", "mace_1h", "heater_shield", "buckler"]
+      }
+    },
     "lich_boss": {
-      "rolls": 2,
+      "rolls": 1,
       "tags": [
         "ring",
         "camp"
