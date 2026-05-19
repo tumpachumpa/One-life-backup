@@ -76,7 +76,7 @@ describe("enemy scaling", () => {
       threat: "minor",
       sprite: "/assets/sprites/encounters/Restless skeleton.png",
       baseStats: {
-        maxHp: 58,
+        maxHp: 88,
         attack: 13,
         armor: 4,
       },
