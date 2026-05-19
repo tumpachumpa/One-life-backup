@@ -238,6 +238,8 @@
           "sword_1h",
           "rapier",
           "mace_1h",
+          "bow",
+          "composite_bow",
           "leather_helm",
           "leather_chest",
           "leather_legs",
@@ -343,7 +345,8 @@
           "plate_legs",
           "plate_boots",
           "plate_gloves",
-          "heater_shield"
+          "heater_shield",
+          "crossbow"
         ]
       }
     },
