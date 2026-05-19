@@ -468,7 +468,6 @@ export function normalizeHeroPet(hero, opts = {}) {
       ...(previous || {}),
       id: petDef.id,
       hp,
-      hunger: clampPetHunger(previous?.hunger),
     },
   };
 }
@@ -542,7 +541,6 @@ export function getHeroPetStatus(hero) {
     sprite: combatant.sprite,
     hp: combatant.hp,
     maxHp: combatant.stats.maxHp,
-    hunger: normalized.pet.hunger ?? 100,
     stats: combatant.stats,
   };
 }
