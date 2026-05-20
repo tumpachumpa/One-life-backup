@@ -1443,7 +1443,7 @@ export function initCombat({
   const allyCombatants = (Array.isArray(allies) ? allies : []).filter(Boolean).map(createAllyCombatant);
   const resolvedEnemyFrontId = getEnemyFrontId(enemies, enemyFrontId) || enemy?.id || null;
   const normalizedHeroWeaponTags = [...(heroWeaponTags || [])];
-  const procState = createInitialProcState(heroHp, { ...heroProcOpts, initialRage: heroInitialRage });
+  const procState = createInitialProcState(heroHp, { ...heroProcOpts, initialRage: heroInitialRage, heroEffects });
   const state = {
     tick: 0,
     phase: PHASE.FIGHTING,
@@ -5094,7 +5094,7 @@ export function createInitialProcState(initialHp = 100, opts = {}) {
     consecutiveParries: 0,
     parryCountThisTick: 0,
     firstHitFired: false,
-    stonewallFirstBlockReady: (heroEffects || []).some(e => e.type === 'first_incoming_guaranteed_block'),
+    stonewallFirstBlockReady: (opts.heroEffects || []).some(e => e.type === 'first_incoming_guaranteed_block'),
     onceFiredIds: [],
     hasTakenDamageThisFight: false,
     hasTakenDamageLastFight: opts.hasTakenDamageLastFight || false,
