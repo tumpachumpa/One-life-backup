@@ -609,17 +609,17 @@
                   "id": "warmonger_the_debt",
                   "name": "The Debt",
                   "summary": [
-                    "If you took damage last fight: start this combat with +15% damage for its duration"
+                    "When reaching 10 Scar Stacks: +30% physical damage reduction for 6 seconds"
                   ],
                   "proc": {
-                    "trigger": "on_combat_start",
+                    "trigger": "on_scar_stacks_reach",
+                    "threshold": 10,
                     "chance": 100,
-                    "condition": {
-                      "took_damage_last_fight": true
-                    },
+                    "condition": null,
                     "effect": {
-                      "type": "gain_damage_this_fight",
-                      "value": 15
+                      "type": "gain_physical_reduction_pct",
+                      "value": 30,
+                      "durationTicks": 6
                     }
                   }
                 }
