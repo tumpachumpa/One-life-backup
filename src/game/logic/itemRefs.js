@@ -399,15 +399,14 @@ function migrateWargFangNecklace(ref) {
     rng
   );
 
-  const result = {
+  return {
     ...ref,
+    baseStats: {},
     effects: affixes,
     rarityAffixPools: ["warg_fang"],
     guaranteedAffixes: 1,
     maxAffixes: 1,
   };
-  delete result.baseStats;
-  return result;
 }
 
 export function migrateItemRef(ref) {
