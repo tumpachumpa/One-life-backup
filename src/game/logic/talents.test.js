@@ -52,12 +52,15 @@ describe("fighter talent tree", () => {
     expect(byId.berserker_stance.name).toBe("Whirlwind");
     expect(byId.berserker_stance.effects).toContainEqual(expect.objectContaining({ type: "unlock_skill", skillId: "whirlwind" }));
     expect(byId.speed_burnout.effects).toContainEqual(expect.objectContaining({ type: "unlock_skill", skillId: "burnout" }));
+    expect(byId.speed_flash.effects).toContainEqual({ type: "momentum_max_cap", value: 12 });
+    expect(byId.warmonger_shield_wall.effects).toContainEqual(expect.objectContaining({ type: "unlock_skill", skillId: "shield_wall" }));
     expect(byId.warmonger_retribution.name).toBe("Retribution");
     expect(byId.warmonger_retribution.proc).toMatchObject({ trigger: "on_block", effect: { type: "counter_hit", damageMult: 0.3 } });
 
     expect(byId.berserker_cornered_beast).toBeUndefined();
     expect(byId.speed_afterimage).toBeUndefined();
     expect(byId.duelist_killing_blow).toBeUndefined();
+    expect(byId.warmonger_martyrs_rage).toBeUndefined();
     expect(byId.warmonger_spite_wall).toBeUndefined();
     expect(byId.warmonger_release).toBeUndefined();
     expect(byId.bleeder_crimson_frenzy).toBeUndefined();

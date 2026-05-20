@@ -239,7 +239,7 @@
           "name": "Speed Demon",
           "pointType": "talent",
           "theme": "momentum",
-          "description": "Build Momentum stacks from hits. Speed spirals into double-hits, bonus Rage, and evasion. Missing an auto attack drops 1 Momentum stack.",
+          "description": "Build Momentum stacks from hits. Speed spirals into double-hits, bonus Rage, and evasion. Missing an auto attack drops 2 Momentum stacks.",
           "tiers": [
             {
               "tier": 1,
@@ -428,19 +428,14 @@
                   "id": "speed_flash",
                   "name": "Flash",
                   "summary": [
-                    "Reaching max Momentum: attack 3 times per second for 2 seconds, then Momentum resets."
+                    "Increase maximum Momentum stacks to 12"
                   ],
-                  "proc": {
-                    "trigger": "on_momentum_max_held",
-                    "held_ticks": 1,
-                    "chance": 100,
-                    "condition": null,
-                    "effect": {
-                      "type": "flash_burst",
-                      "attacksPerTick": 3,
-                      "ticks": 2
+                  "effects": [
+                    {
+                      "type": "momentum_max_cap",
+                      "value": 12
                     }
-                  }
+                  ]
                 }
               ]
             }
@@ -578,22 +573,18 @@
               "title": "Unyielding",
               "choices": [
                 {
-                  "id": "warmonger_martyrs_rage",
-                  "name": "Martyr's Rage",
+                  "id": "warmonger_shield_wall",
+                  "name": "Shield Wall",
                   "summary": [
-                    "While below 30% HP: all damage you take also generates Rage equal to 10% of the hit"
+                    "Unlocks Shield Wall: costs 35 Rage and requires a shield.",
+                    "For 5 seconds: +35% block chance, +50% Block Power recovery, take 20% less damage, and deal 20% less damage."
                   ],
-                  "proc": {
-                    "trigger": "on_take_damage",
-                    "chance": 100,
-                    "condition": {
-                      "hp_pct_below": 30
-                    },
-                    "effect": {
-                      "type": "gain_rage_pct_damage",
-                      "value": 10
+                  "effects": [
+                    {
+                      "type": "unlock_skill",
+                      "skillId": "shield_wall"
                     }
-                  }
+                  ]
                 },
                 {
                   "id": "warmonger_unbreakable",

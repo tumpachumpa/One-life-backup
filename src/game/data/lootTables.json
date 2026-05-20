@@ -1555,7 +1555,7 @@
       }
     },
     "silkfang_matriarch_loot": {
-      "rolls": 2,
+      "rolls": 1,
       "preventDuplicateItems": true,
       "tags": [],
       "dropChance": 0.85,

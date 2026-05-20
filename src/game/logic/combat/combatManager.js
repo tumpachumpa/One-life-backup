@@ -28,6 +28,7 @@ const PLAYER_BLEED_REFRESH_TICKS = 4;
 const SCAR_STACK_MAX = 15;
 const JUGGERNAUT_DAMAGE_TAKEN_REDUCTION_PCT = 50;
 const JUGGERNAUT_DAMAGE_DEALT_PCT = -20;
+const MOMENTUM_BASE_MAX = 10;
 const SUMMON_DEATH_BOSS_STUN_TICKS = 3;
 const SUMMON_DEATH_BOSS_VULNERABLE_TICKS = 4;
 const SUMMON_DEATH_BOSS_DAMAGE_TAKEN_PCT = 20;
@@ -149,6 +150,16 @@ function syncHeroCombatResources(heroResources, procState) {
 function markRageActivity(procState, tick) {
   if (!procState) return;
   procState.lastRageActivityTick = Math.max(procState.lastRageActivityTick ?? 0, tick || 0);
+}
+
+function getMomentumMax(heroProcNodes = [], hero = null) {
+  const passiveCap = (hero?.passiveEffects || []).reduce((max, effect) => (
+    effect.type === 'momentum_max_cap' ? Math.max(max, effect.value || effect.max || 0) : max
+  ), 0);
+  const nodeCap = (heroProcNodes || []).reduce((max, node) => (
+    node?.momentumMaxCap ? Math.max(max, node.momentumMaxCap) : max
+  ), 0);
+  return Math.max(MOMENTUM_BASE_MAX, passiveCap, nodeCap);
 }
 
 function applyScarStackArmor(hero, procState) {
@@ -1646,7 +1657,7 @@ export function processTick(state, playerAction = ACTION.NONE, rng = Math.random
     }
   }
   if (tick === 1 && (procState.momentumCarry || 0) > 0) {
-    procState.momentumStacks = Math.min(10, Math.max(procState.momentumStacks || 0, procState.momentumCarry));
+    procState.momentumStacks = Math.min(getMomentumMax(heroProcNodes, hero), Math.max(procState.momentumStacks || 0, procState.momentumCarry));
     procState.momentumCarry = 0;
   }
   updateMomentumMaxHeld(heroProcNodes, procState, hero, enemy, tick, log, playerRng);
@@ -4972,7 +4983,7 @@ function applyAction(combatant, action, tick, queue, log, rng, heroResources, de
       if (combatant.isPlayer) log.push(makeEntry(tick, combatant.id, 'ability_fail', reason, 0, null, null));
       return applyAction(combatant, ACTION.BASIC_ATTACK, tick, queue, log, rng, heroResources, defender, procState, opts);
     }
-    if (!['sword_stance', 'berserker_stance', 'serrated_strikes', 'stagger_spell', 'rapid_fire', 'heavy_strikes', 'parry_guard', 'en_garde', 'shield_up', 'guard_instinct', 'mace_mastery', 'daze_shout', 'battle_focus', 'iron_will', 'pet_unleash'].includes(ability?.type)) {
+    if (!['sword_stance', 'berserker_stance', 'serrated_strikes', 'stagger_spell', 'rapid_fire', 'heavy_strikes', 'parry_guard', 'en_garde', 'shield_up', 'shield_wall', 'guard_instinct', 'mace_mastery', 'daze_shout', 'battle_focus', 'iron_will', 'pet_unleash'].includes(ability?.type)) {
       resetAutoAttackCycle(combatant, tick);
     }
     if (combatant.isPlayer) markRageActivity(procState, tick);
@@ -5163,15 +5174,15 @@ function applyProcEffect(effect, ctx, procState, heroProcNodes, hero, enemy, tic
       break;
     }
     case 'gain_momentum': {
-      procState.momentumStacks = Math.min(10, (procState.momentumStacks || 0) + (effect.value || 1));
+      procState.momentumStacks = Math.min(getMomentumMax(heroProcNodes, hero), (procState.momentumStacks || 0) + (effect.value || 1));
       break;
     }
     case 'set_momentum_min': {
-      procState.momentumStacks = Math.min(10, Math.max(procState.momentumStacks || 0, effect.value || 0));
+      procState.momentumStacks = Math.min(getMomentumMax(heroProcNodes, hero), Math.max(procState.momentumStacks || 0, effect.value || 0));
       break;
     }
     case 'gain_momentum_carry':
-      procState.momentumCarry = Math.min(10, (procState.momentumCarry || 0) + (effect.value || 0));
+      procState.momentumCarry = Math.min(getMomentumMax(heroProcNodes, hero), (procState.momentumCarry || 0) + (effect.value || 0));
       break;
     case 'store_grudge_pct':
       procState.grudge = (procState.grudge || 0) + Math.floor((ctx.damage || 0) * (effect.value || 35) / 100);
@@ -5503,17 +5514,17 @@ function fireProcTrigger(trigger, ctx, procState, heroProcNodes, hero, enemy, ti
 
 function loseMomentumOnHeroAutoMiss(procState, hero, enemy, tick, log) {
   if (!procState || (procState.momentumStacks || 0) <= 0) return;
-  const lost = 1;
+  const lost = Math.min(2, procState.momentumStacks || 0);
   procState.momentumStacks = Math.max(0, (procState.momentumStacks || 0) - lost);
   procState.momentumMaxHeldTicks = 0;
-  log.push(makeEntry(tick, 'hero', 'proc', `Momentum: missed auto attack and lost ${lost} stack.`, 0, hero.hp, enemy?.hp, {
+  log.push(makeEntry(tick, 'hero', 'proc', `Momentum: missed auto attack and lost ${lost} stack${lost !== 1 ? 's' : ''}.`, 0, hero.hp, enemy?.hp, {
     momentumLost: lost,
   }));
 }
 
 function updateMomentumMaxHeld(heroProcNodes, procState, hero, enemy, tick, log, rng) {
   if (!procState) return;
-  if ((procState.momentumStacks || 0) >= 10) {
+  if ((procState.momentumStacks || 0) >= getMomentumMax(heroProcNodes, hero)) {
     procState.momentumMaxHeldTicks = (procState.momentumMaxHeldTicks || 0) + 1;
     fireProcTrigger('on_momentum_max_held', {
       heldTicks: procState.momentumMaxHeldTicks,

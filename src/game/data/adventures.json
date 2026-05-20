@@ -2766,7 +2766,6 @@
               "type": "combat",
               "x": 75,
               "y": 50,
-              "bossId": "encounter_complete",
               "next": [],
               "enemyId": "white_wolf",
               "paths": {}
@@ -2805,7 +2804,6 @@
               "type": "combat",
               "x": 75,
               "y": 50,
-              "bossId": "encounter_complete",
               "next": [],
               "enemyId": "forest_wisp",
               "paths": {}
@@ -2844,7 +2842,6 @@
               "type": "combat",
               "x": 75,
               "y": 50,
-              "bossId": "encounter_complete",
               "next": [],
               "enemyId": "boar",
               "paths": {}
@@ -2883,7 +2880,6 @@
               "type": "combat",
               "x": 75,
               "y": 50,
-              "bossId": "encounter_complete",
               "next": [],
               "enemyId": "forest_spirit",
               "paths": {}
@@ -2922,7 +2918,6 @@
               "type": "combat",
               "x": 75,
               "y": 50,
-              "bossId": "encounter_complete",
               "next": [],
               "enemyId": "forest_bandit",
               "paths": {}

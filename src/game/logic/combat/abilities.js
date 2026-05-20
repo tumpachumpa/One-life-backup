@@ -1076,6 +1076,42 @@ export function resolveAbilityImpact(action, attacker, defender, tick, rng, cont
       break;
     }
 
+    case 'shield_wall': {
+      const durationTicks = ability.durationTicks || 5;
+      attacker.activeEffects = (attacker.activeEffects || []).filter(effect => effect.sourceAbilityId !== ability.id);
+      attacker.activeEffects.push(
+        {
+          type: 'block_chance_buff',
+          value: ability.blockChanceBonus || 35,
+          remainingTicks: durationTicks,
+          sourceAbilityId: ability.id,
+        },
+        {
+          type: 'block_power_recovery_pct',
+          value: ability.blockPowerRecoveryPct || 50,
+          remainingTicks: durationTicks,
+          sourceAbilityId: ability.id,
+        },
+        {
+          type: 'damage_taken_reduction',
+          reductionPct: ability.damageReductionPct || ability.physicalReductionPct || ability.reductionPct || 20,
+          remainingTicks: durationTicks,
+          sourceAbilityId: ability.id,
+        },
+        {
+          type: 'damage_bonus_pct_buff',
+          value: ability.damageDealtPct ?? -20,
+          remainingTicks: durationTicks,
+          sourceAbilityId: ability.id,
+        },
+      );
+      const text = attacker.isPlayer
+        ? `${ability.name}: shield raised for ${durationTicks} seconds. +${ability.blockChanceBonus || 35}% block chance, +${ability.blockPowerRecoveryPct || 50}% Block Power recovery, ${ability.damageReductionPct || ability.physicalReductionPct || ability.reductionPct || 20}% less damage taken, and ${Math.abs(ability.damageDealtPct ?? -20)}% less damage dealt.`
+        : `${attacker.name} raises a shield wall.`;
+      entries.push({ type: 'ability', text, damage: 0 });
+      break;
+    }
+
     case 'shield_up': {
       attacker.activeEffects = (attacker.activeEffects || []).filter(e => e.type !== 'shield_up');
       attacker.activeEffects.push({

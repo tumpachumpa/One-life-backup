@@ -227,6 +227,23 @@
       "requiredGrudge": 1
     },
     {
+      "id": "shield_wall",
+      "name": "Shield Wall",
+      "description": "Instant. Costs 35 Rage. Requires a shield. For 5 seconds, gain +35% block chance, +50% Block Power recovery, take 20% less damage, and deal 20% less damage.",
+      "rageCost": 35,
+      "castTicks": 0,
+      "cooldownSeconds": 30,
+      "type": "shield_wall",
+      "target": "self",
+      "requiresOffhandFamily": "shield",
+      "requirementLabel": "shield",
+      "durationTicks": 5,
+      "blockChanceBonus": 35,
+      "blockPowerRecoveryPct": 50,
+      "damageReductionPct": 20,
+      "damageDealtPct": -20
+    },
+    {
       "id": "open_vein",
       "name": "Open Vein",
       "description": "Instant. Apply 2 Bleeding stacks directly to the enemy.",

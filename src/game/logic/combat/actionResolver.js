@@ -57,9 +57,14 @@ function consumeIncomingAutoAttackEffects(defender) {
 function recoverBlockPowerFromBlock(defender) {
   const recoveryPct = (defender.passiveEffects || []).reduce((sum, effect) =>
     effect.type === 'block_power_recovery_pct' ? sum + (effect.value || effect.pct || 0) : sum, 0);
+  const activeRecoveryPct = (defender.activeEffects || []).reduce((sum, effect) =>
+    effect.type === 'block_power_recovery_pct' && effectHasTime(effect)
+      ? sum + (effect.value || effect.pct || 0)
+      : sum, 0);
   const maxBlockPower = Math.max(0, defender.blockPowerMax || 0);
-  if (recoveryPct <= 0 || maxBlockPower <= 0) return 0;
-  const recovered = Math.max(1, Math.floor(maxBlockPower * recoveryPct / 100));
+  const totalRecoveryPct = recoveryPct + activeRecoveryPct;
+  if (totalRecoveryPct <= 0 || maxBlockPower <= 0) return 0;
+  const recovered = Math.max(1, Math.floor(maxBlockPower * totalRecoveryPct / 100));
   const before = Math.max(0, defender.blockPower || 0);
   defender.blockPower = Math.min(maxBlockPower, before + recovered);
   return Math.max(0, defender.blockPower - before);

@@ -6549,6 +6549,24 @@ describe("modular combat", () => {
     expect(deactivationProcState.rage).toBe(0);
     expect(deactivationEntries.at(-1)?.text).toContain("draining all Rage");
 
+    const shieldWallHero = { ...hero, activeEffects: [], abilityCooldowns: {}, offhandFamily: "shield" };
+    const shieldWallEntries = resolveAbilityImpact(
+      { ability: combatSkillById.shield_wall },
+      shieldWallHero,
+      enemy,
+      3,
+      () => 0.5,
+      {},
+    );
+    expect(getAbilityEnergyCost(combatSkillById.shield_wall)).toBe(35);
+    expect(shieldWallEntries.at(-1)?.text).toContain("20% less damage dealt");
+    expect(shieldWallHero.activeEffects).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "block_chance_buff", value: 35, remainingTicks: 5 }),
+      expect.objectContaining({ type: "block_power_recovery_pct", value: 50, remainingTicks: 5 }),
+      expect.objectContaining({ type: "damage_taken_reduction", reductionPct: 20, remainingTicks: 5 }),
+      expect.objectContaining({ type: "damage_bonus_pct_buff", value: -20, remainingTicks: 5 }),
+    ]));
+
     const burnoutProcState = { ...state.procState, momentumStacks: 4, momentumMaxHeldTicks: 2 };
     const burnoutEnemy = { ...enemy, hp: 1000, activeEffects: [], armor: 0 };
     const burnoutEntries = resolveAbilityImpact(
@@ -7240,7 +7258,7 @@ describe("modular combat", () => {
     expect(avoided.combatants.hero.passiveEffects).toContainEqual({ type: "evasion_chance", value: 5 });
   });
 
-  it("Stutter Step grants dodge and crit after a missed auto while Momentum drops by one", () => {
+  it("Stutter Step grants dodge and crit after a missed auto while Momentum drops by two", () => {
     const base = initCombat({
       heroName: "Tester",
       heroHp: 100,
@@ -7276,7 +7294,7 @@ describe("modular combat", () => {
 
     const stuttered = processTick(missState, ACTION.NONE, () => 0.99);
 
-    expect(stuttered.procState.momentumStacks).toBe(4);
+    expect(stuttered.procState.momentumStacks).toBe(3);
     expect(stuttered.combatants.hero.activeEffects).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: "evasion_chance", value: 10, source: "speed_stutter_step", consumeOnNextHit: true }),
       expect.objectContaining({ type: "crit_chance_buff", value: 10, source: "speed_stutter_step", consumeOnNextHit: true }),
@@ -7290,7 +7308,7 @@ describe("modular combat", () => {
     expect(hit.combatants.hero.activeEffects.some(effect => effect.source === "speed_stutter_step")).toBe(false);
   });
 
-  it("missed hero autoattacks lose one Momentum stack from 1-10", () => {
+  it("missed hero autoattacks lose up to two Momentum stacks from 1-10", () => {
     const base = initCombat({
       heroName: "Tester",
       heroHp: 100,
@@ -7318,7 +7336,7 @@ describe("modular combat", () => {
 
       const missed = processTick(missState, ACTION.NONE, () => 0.99);
 
-      expect(missed.procState.momentumStacks).toBe(stacks - 1);
+      expect(missed.procState.momentumStacks).toBe(Math.max(0, stacks - 2));
       expect(missed.procState.momentumMaxHeldTicks).toBe(0);
       expect(missed.procState.guaranteedNextHit).toBe(false);
       expect(missed.log.some(entry => entry.type === "proc" && entry.text.includes("missed auto attack"))).toBe(true);
@@ -7951,7 +7969,7 @@ describe("modular combat", () => {
     expect(heroHits[1]).toMatchObject({ extraHit: true, extraHitSource: "double_hit" });
   });
 
-  it("Flash triggers after max Momentum is held and forces burst attacks", () => {
+  it("Flash raises max Momentum to 12", () => {
     const enemyObj = {
       id: "target_dummy",
       name: "Target Dummy",
@@ -7967,30 +7985,27 @@ describe("modular combat", () => {
       heroArmor: 0,
       enemyObj,
       heroAbilities: [],
-      heroEffects: [],
+      heroEffects: [{ type: "momentum_max_cap", value: 12 }],
       heroAttackRate: 0.1,
       heroProcNodes: [{
-        id: "speed_flash",
+        id: "speed_momentum_gen",
         proc: {
-          trigger: "on_momentum_max_held",
-          held_ticks: 3,
+          trigger: "on_hit",
           chance: 100,
-          effect: { type: "flash_burst", attacksPerTick: 3, ticks: 2 },
+          effect: { type: "gain_momentum", value: 1 },
         },
       }],
     });
-    state = { ...state, procState: { ...state.procState, momentumStacks: 10 } };
-
-    state = processTick(state, ACTION.NONE, () => 0.5);
-    state = processTick(state, ACTION.NONE, () => 0.5);
-    state = processTick(state, ACTION.NONE, () => 0.5);
-
-    expect(state.procState.momentumStacks).toBe(0);
-    expect(state.combatants.hero.activeEffects.some(effect => effect.type === "flash_burst")).toBe(true);
+    state = { ...state, procState: { ...state.procState, momentumStacks: 11 } };
 
     state = processTick(state, ACTION.BASIC_ATTACK, () => 0.01);
-    const heroHits = state.log.filter(entry => entry.actorId === "hero" && entry.type === "hit");
-    expect(heroHits.length).toBeGreaterThanOrEqual(3);
+
+    expect(state.procState.momentumStacks).toBe(12);
+    expect(state.combatants.hero.passiveEffects).toContainEqual({
+      type: "attack_speed_bonus_pct",
+      value: 12 * MOMENTUM_ATTACK_SPEED_PCT_PER_STACK,
+      source: "momentum",
+    });
   });
 
   it("zero attack enemies can hit for zero during testing", () => {
@@ -9786,15 +9801,14 @@ describe("talent proc behavior", () => {
     expect(talentBlock).toBe(baseBlock + 15);
   });
 
-  it("Flash fires after 1 tick at max momentum", () => {
-    const flash = {
-      id: "speed_flash",
+  it("Flash lets Momentum build above the normal cap", () => {
+    const momentumBuilder = {
+      id: "speed_momentum_builder",
       proc: {
-        trigger: "on_momentum_max_held",
-        held_ticks: 1,
+        trigger: "on_hit",
         chance: 100,
         condition: null,
-        effect: { type: "flash_burst", attacksPerTick: 3, ticks: 2 },
+        effect: { type: "gain_momentum", value: 1 },
       },
     };
     const base = initCombat({
@@ -9805,27 +9819,26 @@ describe("talent proc behavior", () => {
       heroArmor: 0,
       enemyObj: dummy(),
       heroAbilities: [],
-      heroEffects: [],
-      heroProcNodes: [flash],
+      heroEffects: [{ type: "momentum_max_cap", value: 12 }],
+      heroProcNodes: [momentumBuilder],
     });
     const state = {
       ...base,
       procState: { ...base.procState, momentumStacks: 10, momentumMaxHeldTicks: 0 },
     };
-    const after = processTick(state, ACTION.NONE, () => 0.01);
-    expect(after.combatants.hero.activeEffects.some(e => e.type === "flash_burst" && e.attacksPerTick === 3)).toBe(true);
-    expect(after.log.some(entry => entry.text.includes("Flash:"))).toBe(true);
+    const hitAction = enqueueAction(createActionQueue(), "hero", ACTION.BASIC_ATTACK, 1, 10);
+    const after = processTick({ ...state, tick: 2, actionQueue: hitAction }, ACTION.NONE, () => 0.01);
+    expect(after.procState.momentumStacks).toBe(11);
   });
 
-  it("Flash does NOT fire before the held_ticks threshold is met", () => {
-    const flash = {
-      id: "speed_flash",
+  it("Momentum stays capped at 10 without Flash", () => {
+    const momentumBuilder = {
+      id: "speed_momentum_builder",
       proc: {
-        trigger: "on_momentum_max_held",
-        held_ticks: 3,
+        trigger: "on_hit",
         chance: 100,
         condition: null,
-        effect: { type: "flash_burst", attacksPerTick: 3, ticks: 2 },
+        effect: { type: "gain_momentum", value: 1 },
       },
     };
     const base = initCombat({
@@ -9837,15 +9850,15 @@ describe("talent proc behavior", () => {
       enemyObj: dummy(),
       heroAbilities: [],
       heroEffects: [],
-      heroProcNodes: [flash],
+      heroProcNodes: [momentumBuilder],
     });
     const state = {
       ...base,
       procState: { ...base.procState, momentumStacks: 10, momentumMaxHeldTicks: 0 },
     };
-    // After 1 tick: heldTicks = 1, threshold is 3 → should NOT fire
-    const after = processTick(state, ACTION.NONE, () => 0.01);
-    expect(after.combatants.hero.activeEffects.some(e => e.type === "flash_burst")).toBe(false);
+    const hitAction = enqueueAction(createActionQueue(), "hero", ACTION.BASIC_ATTACK, 1, 10);
+    const after = processTick({ ...state, tick: 2, actionQueue: hitAction }, ACTION.NONE, () => 0.01);
+    expect(after.procState.momentumStacks).toBe(10);
   });
 
   it("Retribution deals 30% weapon damage back as true damage on block", () => {
