@@ -374,19 +374,11 @@
                   "id": "speed_overdrive",
                   "name": "Overdrive",
                   "summary": [
-                    "At 4+ Momentum stacks: each hit generates +6 Rage"
+                    "Missing an autoattack only reduces momentum stack count by 1"
                   ],
-                  "proc": {
-                    "trigger": "on_hit",
-                    "chance": 100,
-                    "condition": {
-                      "momentum_stacks_gte": 4
-                    },
-                    "effect": {
-                      "type": "gain_rage",
-                      "value": 6
-                    }
-                  }
+                  "effects": [
+                    { "type": "momentum_miss_stacks_lost", "value": 1 }
+                  ]
                 },
                 {
                   "id": "speed_burnout",
@@ -447,7 +439,7 @@
           "name": "Warmonger Survivor",
           "pointType": "talent",
           "theme": "endurance",
-          "description": "Every hit you take builds Scar armor and stores Grudge damage to release. Long fights favor you. At 15 Scar Stacks, enter Juggernaut.",
+          "description": "Every hit you take builds Scar armor and stores Grudge damage to release. Long fights favor you. At 10 Scar Stacks, enter Juggernaut.",
           "tiers": [
             {
               "tier": 1,
@@ -609,17 +601,17 @@
                   "id": "warmonger_the_debt",
                   "name": "The Debt",
                   "summary": [
-                    "If you took damage last fight: start this combat with +15% damage for its duration"
+                    "When reaching 10 Scar Stacks: +30% physical damage reduction for 6 seconds"
                   ],
                   "proc": {
-                    "trigger": "on_combat_start",
+                    "trigger": "on_scar_stacks_reach",
+                    "threshold": 10,
                     "chance": 100,
-                    "condition": {
-                      "took_damage_last_fight": true
-                    },
+                    "condition": null,
                     "effect": {
-                      "type": "gain_damage_this_fight",
-                      "value": 15
+                      "type": "gain_physical_reduction_pct",
+                      "value": 30,
+                      "durationTicks": 6
                     }
                   }
                 }
@@ -633,10 +625,11 @@
                   "id": "warmonger_juggernaut",
                   "name": "Juggernaut",
                   "summary": [
-                    "At 15 Scar Stacks: enter Juggernaut - armor cannot be reduced, take 50% less damage, and deal 20% less damage. Lasts until combat ends."
+                    "At 10 Scar Stacks: enter Juggernaut - armor cannot be reduced, take 50% less damage, and deal 20% less damage. Lasts until combat ends."
                   ],
                   "proc": {
-                    "trigger": "on_scar_stacks_max",
+                    "trigger": "on_scar_stacks_reach",
+                    "threshold": 10,
                     "chance": 100,
                     "condition": {
                       "once_per_combat": true

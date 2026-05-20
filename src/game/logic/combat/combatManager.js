@@ -5168,6 +5168,9 @@ function applyProcEffect(effect, ctx, procState, heroProcNodes, hero, enemy, tic
       const maxStacks = effect.max || SCAR_STACK_MAX;
       procState.scarStacks = Math.min(maxStacks, previousStacks + (effect.value || 1));
       applyScarStackArmor(hero, procState);
+      if (previousStacks !== procState.scarStacks) {
+        fireProcTrigger('on_scar_stacks_reach', { ...ctx, prevStacks: previousStacks, newStacks: procState.scarStacks }, procState, heroProcNodes, hero, enemy, tick, log, rng);
+      }
       if (previousStacks < maxStacks && procState.scarStacks >= maxStacks) {
         fireProcTrigger('on_scar_stacks_max', { ...ctx, scarStacks: procState.scarStacks }, procState, heroProcNodes, hero, enemy, tick, log, rng);
       }
@@ -5524,6 +5527,10 @@ function fireProcTrigger(trigger, ctx, procState, heroProcNodes, hero, enemy, ti
       const threshold = node.proc.threshold;
       if (threshold != null && !(ctx.prevStacks < threshold && ctx.newStacks >= threshold)) continue;
     }
+    if (trigger === 'on_scar_stacks_reach') {
+      const threshold = node.proc.threshold;
+      if (threshold != null && !(ctx.prevStacks < threshold && ctx.newStacks >= threshold)) continue;
+    }
     if (!checkProcCondition(node.proc.condition, nodeCtx, procState, hero, enemy)) continue;
     const chance = node.proc.chance ?? 100;
     if (chance < 100 && procRng() * 100 >= chance) continue;
@@ -5536,7 +5543,9 @@ function fireProcTrigger(trigger, ctx, procState, heroProcNodes, hero, enemy, ti
 
 function loseMomentumOnHeroAutoMiss(procState, hero, enemy, tick, log) {
   if (!procState || (procState.momentumStacks || 0) <= 0) return;
-  const lost = Math.min(2, procState.momentumStacks || 0);
+  const missLoss = (hero?.passiveEffects || []).reduce((acc, e) =>
+    e.type === 'momentum_miss_stacks_lost' ? Math.min(acc, e.value ?? 2) : acc, 2);
+  const lost = Math.min(missLoss, procState.momentumStacks || 0);
   procState.momentumStacks = Math.max(0, (procState.momentumStacks || 0) - lost);
   procState.momentumMaxHeldTicks = 0;
   log.push(makeEntry(tick, 'hero', 'proc', `Momentum: missed auto attack and lost ${lost} stack${lost !== 1 ? 's' : ''}.`, 0, hero.hp, enemy?.hp, {
