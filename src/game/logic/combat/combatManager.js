@@ -5251,20 +5251,6 @@ function applyProcEffect(effect, ctx, procState, heroProcNodes, hero, enemy, tic
       });
       break;
     }
-    case 'extra_auto_attack': {
-      if (!enemy || enemy.hp <= 0) break;
-      const rawDmg = Math.max(1, Math.floor((hero.damage || 0) * (effect.damageMult ?? 0.5)));
-      const dmg = applyArmor(rawDmg, getEffectiveArmor(enemy), getPassiveArmorPenPct(hero));
-      const applied = applyCombatantDamage(enemy, dmg);
-      log.push(makeEntry(tick, 'hero', 'hit', `Killing Speed: extra attack for ${applied.damage}.`, applied.damage, hero.hp, enemy.hp, {
-        targetId: enemy.id,
-        extraHit: true,
-        extraHitSource: 'killing_speed',
-        shieldAbsorbed: applied.absorbed || 0,
-      }));
-      logDamageShieldAbsorb(enemy, applied, tick, log, hero, enemy, { targetId: enemy.id });
-      break;
-    }
     case 'heal_pct_max_hp': {
       const healed = Math.min(hero.maxHp - hero.hp, Math.max(1, Math.floor(hero.maxHp * (effect.value || 5) / 100)));
       if (healed > 0) {
