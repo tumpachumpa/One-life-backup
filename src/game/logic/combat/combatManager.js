@@ -4013,6 +4013,11 @@ function resolveBasicAttackImpact(action, attacker, defender, tick, log, rng, he
       ...targetMeta,
     }));
   }
+  if (defenderIsHero && procState?.stonewallFirstBlockReady) {
+    procState.stonewallFirstBlockReady = false;
+    defender.activeEffects = defender.activeEffects || [];
+    defender.activeEffects.push({ type: 'shield_up', attacksRemaining: 1, counterDamageMult: 1.0 });
+  }
   const result = resolveImpact(adjustedAction, defender, {
     rng,
     armorPenPct: adjustedAction.armorPenPct || 0,
@@ -5089,6 +5094,7 @@ export function createInitialProcState(initialHp = 100, opts = {}) {
     consecutiveParries: 0,
     parryCountThisTick: 0,
     firstHitFired: false,
+    stonewallFirstBlockReady: (heroEffects || []).some(e => e.type === 'first_incoming_guaranteed_block'),
     onceFiredIds: [],
     hasTakenDamageThisFight: false,
     hasTakenDamageLastFight: opts.hasTakenDamageLastFight || false,

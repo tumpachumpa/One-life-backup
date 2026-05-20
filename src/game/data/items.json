@@ -3651,6 +3651,35 @@
       "icon": "/assets/items/generated/shield.png"
     },
     {
+      "id": "stonewall",
+      "name": "Stonewall",
+      "description": "A slab of living granite torn from the chest of a Stone Golem. The first blow it receives is always returned.",
+      "rarity": "artifact",
+      "size": [2, 3],
+      "type": "gear",
+      "slot": "offhand",
+      "family": "shield",
+      "armorType": "shield",
+      "armorDice": { "count": 2, "sides": 6, "bonus": 4, "text": "2d6+4", "average": 11 },
+      "baseStats": { "armor": 16 },
+      "effects": [
+        { "type": "block_chance", "value": 20 },
+        { "type": "block_power", "value": 40 },
+        { "type": "block_power_regen", "value": 4 },
+        { "type": "counter_chance", "value": 15 },
+        {
+          "name": "First Wall",
+          "type": "first_incoming_guaranteed_block",
+          "counterDamageMult": 1.0,
+          "description": "The first incoming hit each combat is completely blocked at no Block Power cost. The blow is immediately answered with a full-damage counter."
+        }
+      ],
+      "tags": ["shield", "offhand", "defense", "heavy", "artifact", "stone", "golem"],
+      "price": 5000,
+      "dropWeight": 0,
+      "icon": "/assets/items/Stonewall.png"
+    },
+    {
       "id": "spider_silk_cape",
       "name": "Spider Silk Cape",
       "description": "Woven from tough cave spider silk. Whisper-light and harder to hit in.",
@@ -4041,7 +4070,8 @@
       "slot": "chest",
       "family": "armor",
       "armorType": "medium",
-      "baseStats": { "armor": 18 },
+      "armorDice": { "count": 2, "sides": 4, "bonus": 6, "text": "2d4+6", "average": 11 },
+      "baseStats": { "armor": 14 },
       "tags": ["chest", "medium", "hide", "troll", "armor_medium"],
       "rarityAffixPools": ["guard", "survival"],
       "price": 380,
@@ -4057,7 +4087,8 @@
       "slot": "legs",
       "family": "armor",
       "armorType": "medium",
-      "baseStats": { "armor": 12 },
+      "armorDice": { "count": 2, "sides": 4, "bonus": 2, "text": "2d4+2", "average": 7 },
+      "baseStats": { "armor": 10 },
       "tags": ["legs", "medium", "hide", "troll", "armor_medium"],
       "rarityAffixPools": ["guard", "survival"],
       "price": 280,

@@ -1187,7 +1187,7 @@
             {
               "id": "orc_shaman_boss",
               "type": "boss",
-              "bossId": "orc_general",
+              "bossIds": ["orc_general", "orc_shaman"],
               "encounterCap": 1,
               "charges": {
                 "max": 1,

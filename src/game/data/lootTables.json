@@ -1378,17 +1378,13 @@
         "itemLevelBonus": 4,
         "baseIds": [
           "stoneguard_mace",
-          "mace_1h",
-          "greatsword_2h",
-          "plate_helm",
-          "plate_chest",
-          "plate_legs",
           "oathbound_plate_cuirass",
-          "oathbound_plate_legguards",
-          "gargoyle_stone_ring",
-          "heater_shield",
-          "tower_shield"
+          "oathbound_plate_legguards"
         ]
+      },
+      "equipmentDrops": {
+        "dropChance": 0.01,
+        "items": { "stonewall": 1 }
       }
     },
     "black_knight": {
