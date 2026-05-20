@@ -4,6 +4,28 @@ const pool = require('../db/pool');
 
 const contentModP = import('../game/logic/content.js');
 
+// Lazily built Map of nodeId → { max, rechargeSeconds } covering both
+// single-encounter regions and adventure nodes that define charges.
+let chargeConfigCache = null;
+
+async function getChargeConfigs() {
+  if (chargeConfigCache) return chargeConfigCache;
+  const { regionById, adventureById } = await contentModP;
+  const map = new Map();
+  for (const region of Object.values(regionById || {})) {
+    if (region?.charges) map.set(region.id, region.charges);
+  }
+  for (const adventure of Object.values(adventureById || {})) {
+    for (const route of adventure.routes || []) {
+      for (const node of route.nodes || []) {
+        if (node?.charges) map.set(node.id, node.charges);
+      }
+    }
+  }
+  chargeConfigCache = map;
+  return map;
+}
+
 // Mirrors src/logic/encounterCharges.js — kept inline so no shared ESM dependency
 function getAvailable(max, rechargeMs, current, lastRechargeAt, nowMs) {
   return Math.min(max, current + Math.floor((nowMs - lastRechargeAt) / rechargeMs));
@@ -38,18 +60,19 @@ async function encounterRoutes(fastify) {
   });
 
   // POST /encounter/consume-charge — validate and consume 1 charge
+  // regionId can be a single-encounter region id OR an adventure node id.
   fastify.post('/encounter/consume-charge', { preHandler: fastify.authenticate }, async (request, reply) => {
     const { id: userId } = request.user;
     const { regionId } = request.body;
     if (!regionId) return reply.status(400).send({ error: 'Missing regionId' });
 
-    const { regionById } = await contentModP;
-    const region = regionById?.[regionId];
-    if (!region?.singleEncounter || !region?.charges) {
-      return reply.status(404).send({ error: 'Region not found or not a single encounter' });
+    const chargeConfigs = await getChargeConfigs();
+    const chargeConfig = chargeConfigs.get(regionId);
+    if (!chargeConfig) {
+      return reply.status(404).send({ error: 'Node not found or not chargeable' });
     }
 
-    const { max, rechargeSeconds } = region.charges;
+    const { max, rechargeSeconds } = chargeConfig;
     const rechargeMs = rechargeSeconds * 1000;
 
     const client = await pool.connect();
@@ -57,8 +80,6 @@ async function encounterRoutes(fastify) {
       await client.query('BEGIN');
 
       // Initialize row at full charges if it doesn't exist yet, then lock it.
-      // The two-step (INSERT ON CONFLICT DO NOTHING + SELECT FOR UPDATE) prevents
-      // concurrent first-use requests from both seeing an empty row and double-consuming.
       await client.query(
         `INSERT INTO encounter_charges (user_id, region_id, current_charges, last_recharge_at)
          VALUES ($1, $2, $3, NOW())
