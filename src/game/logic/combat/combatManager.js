@@ -5174,7 +5174,11 @@ function applyProcEffect(effect, ctx, procState, heroProcNodes, hero, enemy, tic
       break;
     }
     case 'gain_momentum': {
-      procState.momentumStacks = Math.min(getMomentumMax(heroProcNodes, hero), (procState.momentumStacks || 0) + (effect.value || 1));
+      const prevMomentum = procState.momentumStacks || 0;
+      procState.momentumStacks = Math.min(getMomentumMax(heroProcNodes, hero), prevMomentum + (effect.value || 1));
+      if (prevMomentum !== procState.momentumStacks) {
+        fireProcTrigger('on_momentum_reach', { prevStacks: prevMomentum, newStacks: procState.momentumStacks }, procState, heroProcNodes, hero, enemy, tick, log, rng);
+      }
       break;
     }
     case 'set_momentum_min': {
@@ -5214,6 +5218,20 @@ function applyProcEffect(effect, ctx, procState, heroProcNodes, hero, enemy, tic
         targetId: enemy.id,
         extraHit: true,
         extraHitSource: 'hair_trigger',
+        shieldAbsorbed: applied.absorbed || 0,
+      }));
+      logDamageShieldAbsorb(enemy, applied, tick, log, hero, enemy, { targetId: enemy.id });
+      break;
+    }
+    case 'extra_auto_attack': {
+      if (!enemy || enemy.hp <= 0) break;
+      const rawDmg = Math.max(1, Math.floor((hero.damage || 0) * (effect.damageMult ?? 0.5)));
+      const dmg = applyArmor(rawDmg, getEffectiveArmor(enemy), getPassiveArmorPenPct(hero));
+      const applied = applyCombatantDamage(enemy, dmg);
+      log.push(makeEntry(tick, 'hero', 'hit', `Killing Speed: extra attack for ${applied.damage}.`, applied.damage, hero.hp, enemy.hp, {
+        targetId: enemy.id,
+        extraHit: true,
+        extraHitSource: 'killing_speed',
         shieldAbsorbed: applied.absorbed || 0,
       }));
       logDamageShieldAbsorb(enemy, applied, tick, log, hero, enemy, { targetId: enemy.id });
@@ -5501,6 +5519,10 @@ function fireProcTrigger(trigger, ctx, procState, heroProcNodes, hero, enemy, ti
         const after = nodeCtx.hpPctAfter ?? getHpPct(hero);
         if (!(before > threshold && after <= threshold)) continue;
       }
+    }
+    if (trigger === 'on_momentum_reach') {
+      const threshold = node.proc.threshold;
+      if (threshold != null && !(ctx.prevStacks < threshold && ctx.newStacks >= threshold)) continue;
     }
     if (!checkProcCondition(node.proc.condition, nodeCtx, procState, hero, enemy)) continue;
     const chance = node.proc.chance ?? 100;

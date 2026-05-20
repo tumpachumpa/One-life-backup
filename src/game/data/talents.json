@@ -406,15 +406,16 @@
                   "id": "speed_killing_speed",
                   "name": "Killing Speed",
                   "summary": [
-                    "On kill: carry 5 Momentum stacks into the start of your next fight"
+                    "When reaching 5 Momentum stacks, do an extra autoattack with 50% damage"
                   ],
                   "proc": {
-                    "trigger": "on_kill",
+                    "trigger": "on_momentum_reach",
+                    "threshold": 5,
                     "chance": 100,
                     "condition": null,
                     "effect": {
-                      "type": "gain_momentum_carry",
-                      "value": 5
+                      "type": "extra_auto_attack",
+                      "damageMult": 0.5
                     }
                   }
                 }

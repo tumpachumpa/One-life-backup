@@ -3,6 +3,7 @@ const pool = require('../db/pool');
 // ESM game modules — loaded once, reused across requests
 const heroLogicP = import('../game/logic/hero.js');
 const inventoryLogicP = import('../game/logic/inventory.js');
+const contentP = import('../game/logic/content.js');
 
 const ESSENCE_PER_HOUR = 100;
 const INV_COLS = 5; // mirrors client constants.js
@@ -269,6 +270,29 @@ async function heroRoutes(fastify) {
       } else {
         // First save for this slot — new heroes start at 0; clamp any inflated client values
         if ((hero.hero.xp ?? 0) > 0) { hero.hero.xp = 0; heroWasClamped = true; }
+      }
+    }
+
+    // Enforce class weapon restrictions (e.g. fighters cannot equip daggers)
+    if (hero.hero?.heroClass && hero.hero?.equip) {
+      const { heroClasses, getItem } = await contentP;
+      const classDef = heroClasses.find(c => c.id === hero.hero.heroClass);
+      const forbidden = classDef?.forbiddenWeaponFamilies || [];
+      if (forbidden.length) {
+        const { addToGrid } = await inventoryLogicP;
+        const { calcStats } = await heroLogicP;
+        const invRows = Math.max(6, Math.ceil((calcStats(hero.hero).inventorySlots || 30) / INV_COLS));
+        for (const slot of ['weapon', 'offhand']) {
+          const equipped = hero.hero.equip[slot];
+          if (!equipped) continue;
+          const item = getItem(equipped);
+          if (item?.family && forbidden.includes(item.family)) {
+            delete hero.hero.equip[slot];
+            const updated = addToGrid(hero.hero.inventory || [], equipped, invRows);
+            if (updated) hero.hero.inventory = updated;
+            heroWasClamped = true;
+          }
+        }
       }
     }
 
